@@ -98,10 +98,11 @@ python manage.py runserver
 
 ---
 
-## 📁 Estructura del Proyecto
+# 📁 **Estructura del Proyecto - Sistema de Gestión Documental**
 
----
+## 🏗️ **Arquitectura General del Proyecto**
 
+```
 sistema_gestion/                          # 🎯 RAÍZ DEL PROYECTO
 ├── 📁 .github/                           # ⚙️ Configuración GitHub
 ├── 📁 apps/                              # 🚀 Aplicaciones Django
@@ -113,6 +114,100 @@ sistema_gestion/                          # 🎯 RAÍZ DEL PROYECTO
 ├── 📄 CONTRIBUTING.md                    # 👥 Guía para Colaboradores
 ├── 📄 manage.py                          # 🛠️ Script de Gestión Django
 └── 📄 README.md                          # 📚 Documentación Principal
+```
+
+---
+
+## 🔍 **Estructura Detallada por Carpeta**
+
+### **1. 📁 .github/ - Configuración GitHub**
+```
+.github/
+├── 📁 workflows/                         # 🤖 CI/CD Automatización
+│   └── 📄 django-ci.yml                  # Pipeline de tests Django
+├── 📁 ISSUE_TEMPLATE/                    # 📋 Plantillas de Issues
+│   ├── 📄 bug_report.md                  # 🐛 Reporte de errores
+│   ├── 📄 configuracion.md               # ⚙️ Solicitudes de configuración
+│   └── 📄 feature_request.md             # ✨ Solicitudes de nuevas features
+└── 📄 pull_request_template.md           # 🔄 Plantilla para Pull Requests
+```
+
+### **2. 📁 apps/ - Aplicaciones Django**
+```
+apps/
+├── 📄 .gitkeep                           # 📌 Mantener estructura en Git
+└── 📄 README.md                          # 📖 Documentación de apps
+```
+**Propósito:** Contiene todas las aplicaciones Django del sistema. Cada módulo (Clientes, Pagos, Contratos) será una app independiente aquí.
+
+### **3. 📁 requirements/ - Gestión de Dependencias**
+```
+requirements/
+└── 📄 development.txt                    # 🛠️ Dependencias desarrollo
+```
+**Archivos planeados:**
+- `production.txt` - Dependencias producción
+- `testing.txt` - Dependencias para testing
+
+### **4. 📁 sistema_gestion/ - Configuración Django**
+```
+sistema_gestion/
+├── 📁 settings/                          # ⚙️ Configuración Modular
+│   ├── 📄 __init__.py                    # 🔗 Inicialización del módulo
+│   ├── 📄 base.py                        # 🏗️ Configuración base común
+│   ├── 📄 development.py                 # 💻 Configuración desarrollo
+│   └── 📄 production.py                  # 🌐 Configuración producción
+├── 📄 __init__.py                        # 🐍 Paquete Python
+├── 📄 asgi.py                           # 🚀 ASGI configuration
+├── 📄 urls.py                           # 🌐 URLs principales
+└── 📄 wsgi.py                           # 🌐 WSGI configuration
+```
+
+### **5. 📁 static/ - Archivos Estáticos**
+```
+static/
+├── 📁 css/                               # 🎨 Hojas de estilo
+│   ├── 📄 .gitkeep                       # 📌 Mantener estructura
+│   └── 📄 README.md                      # 📖 Documentación CSS
+├── 📁 images/                            # 🖼️ Imágenes y assets
+│   ├── 📄 .gitkeep                       # 📌 Mantener estructura
+│   └── 📄 README.md                      # 📖 Documentación imágenes
+└── 📁 js/                                # ⚡ JavaScript
+    ├── 📄 .gitkeep                       # 📌 Mantener estructura
+    └── 📄 README.md                      # 📖 Documentación JS
+```
+
+### **6. 📁 templates/ - Sistema de Plantillas**
+```
+templates/
+├── 📁 registration/                      # 🔐 Autenticación
+│   └── 📄 login.html                     # 🖥️ Pantalla de login personalizada
+└── 📄 base.html                          # 🏗️ Plantilla base del proyecto
+```
+
+---
+
+## 🗂️ **Estructura de Módulos Futuros**
+
+### **📁 Apps Planeadas:**
+```
+apps/
+├── 📁 clientes/                          # 👥 Gestión de Clientes
+│   ├── 📁 migrations/
+│   ├── 📁 static/clientes/
+│   ├── 📁 templates/clientes/
+│   ├── 📄 admin.py
+│   ├── 📄 apps.py
+│   ├── 📄 models.py
+│   ├── 📄 tests.py
+│   ├── 📄 urls.py
+│   └── 📄 views.py
+├── 📁 pagos/                             # 💰 Sistema de Pagos
+├── 📁 contratos/                         # 📑 Gestión de Contratos
+├── 📁 sellos/                            # 🏷️ Sellos Dorados
+├── 📁 recibos/                           # 🧾 Generación de Recibos
+└── 📁 expedientes/                       # 📂 Gestión Documental
+```
 
 ---
 
