@@ -100,31 +100,19 @@ python manage.py runserver
 
 ## 📁 Estructura del Proyecto
 
-```
-sistema_gestion/
-├── apps/                           # Módulos de la aplicación
-│   ├── clientes/                   # Gestión de clientes
-│   ├── pagos/                      # Gestión de pagos
-│   └── [nuevo_modulo]/            # Nuevos módulos aquí
-├── sistema_gestion/                # Configuración Django
-│   ├── settings/
-│   │   ├── base.py                # Configuración base
-│   │   └── development.py         # Configuración desarrollo
-│   └── urls.py                    # URLs principales
-├── templates/                      # Plantillas HTML
-│   ├── base.html                  # Plantilla base
-│   └── [modulo]/                  # Plantillas por módulo
-├── static/                         # Archivos estáticos
-│   ├── css/
-│   ├── js/
-│   └── images/
-├── requirements/                   # Dependencias
-│   └── development.txt
-├── .github/                       # Configuración GitHub
-│   ├── workflows/                 # CI/CD
-│   └── ISSUE_TEMPLATE/           # Plantillas issues
-└── manage.py                      # Script gestión Django
-```
+---
+
+sistema_gestion/                          # 🎯 RAÍZ DEL PROYECTO
+├── 📁 .github/                           # ⚙️ Configuración GitHub
+├── 📁 apps/                              # 🚀 Aplicaciones Django
+├── 📁 requirements/                      # 📦 Dependencias del Proyecto
+├── 📁 sistema_gestion/                   # ⚙️ Configuración Django
+├── 📁 static/                            # 🎨 Archivos Estáticos
+├── 📁 templates/                         # 🖥️ Plantillas HTML
+├── 📄 .gitignore                         # 🙈 Archivos ignorados por Git
+├── 📄 CONTRIBUTING.md                    # 👥 Guía para Colaboradores
+├── 📄 manage.py                          # 🛠️ Script de Gestión Django
+└── 📄 README.md                          # 📚 Documentación Principal
 
 ---
 
