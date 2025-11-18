@@ -21,7 +21,7 @@
 - **Python 3.8+** - [Descargar aquí](https://www.python.org/downloads/)
 - **Git** - [Descargar aquí](https://git-scm.com/)
 - **VS Code** (Recomendado) - [Descargar aquí](https://code.visualstudio.com/)
-- **Postgres** - [Descargar aquí](https://www.postgresql.org/)
+- **PostgreSQL** - [Descargar aquí](https://www.postgresql.org/)
 
 ### Extensiones VS Code Recomendadas
 ```json
