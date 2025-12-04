@@ -1,38 +1,101 @@
 from django.contrib import admin
-from .models import Receipt
+from django.contrib.auth.admin import UserAdmin
+from .models import CustomUser, Receipt, Rol
+from .forms import CustomUserCreationForm, CustomUserChangeForm
 
-# Customización para mostrar campos específicos en la lista del admin
+# ====================================================================
+# Configuración para CustomUser
+# ====================================================================
+
+# Registraremos CustomUser con un UserAdmin personalizado.
+class CustomUserAdmin(UserAdmin):
+    """
+    Define cómo se muestra y edita CustomUser en el panel de administración.
+    """
+    # 1. Especificar los formularios a usar para crear y cambiar usuarios
+    add_form = CustomUserCreationForm
+    form = CustomUserChangeForm
+    model = CustomUser
+    
+    # 2. Definir los campos que se muestran en la tabla de lista
+    list_display = (
+        "username", 
+        "email", 
+        "first_name", 
+        "last_name", 
+        "rol", # Mostramos el rol en la lista
+        "is_staff",
+        "is_active"
+    )
+    
+    # 3. Campos para la vista de edición/detalle del usuario
+    fieldsets = UserAdmin.fieldsets + (
+        # Añadir el campo 'rol' al final de la sección 'Permissions'
+        ("Roles y Permisos Adicionales", {"fields": ("rol",)}),
+    )
+    
+    # 4. Campos para la vista de creación de usuario
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ("Roles", {"fields": ("rol",)}),
+    )
+    
+    # 5. Permite filtrar por rol
+    list_filter = UserAdmin.list_filter + ('rol',)
+
+
+# ====================================================================
+# Configuración para Receipt
+# ====================================================================
+
 class ReceiptAdmin(admin.ModelAdmin):
     """
-    Define cómo se verá el modelo Receipt en el panel de administración de Django.
+    Configuración simple para el modelo Recibo.
     """
-    # Campos a mostrar en la lista de recibos
-    list_display = ('receipt_number', 'client_name', 'client_id', 'amount', 'payment_date', 'status', 'created_by')
-    # Campos por los que se puede buscar
-    search_fields = ('receipt_number', 'client_name', 'client_id', 'transaction_number')
-    # Filtros laterales
-    list_filter = ('status', 'payment_date', 'created_by')
-    # Campos de solo lectura
-    readonly_fields = ('created_at', 'created_by')
+    list_display = (
+        'receipt_number', 
+        'client_name', 
+        'amount', 
+        'status', 
+        'anulado', 
+        'created_by', 
+        'payment_date'
+    )
+    list_filter = ('status', 'anulado', 'payment_date', 'created_at')
+    search_fields = ('receipt_number', 'client_name', 'client_id', 'concept')
+    ordering = ('-created_at',)
     
-    # Define la estructura de los formularios de edición
+    # Agrupación de campos en la vista de detalle
     fieldsets = (
-        ('Información del Recibo', {
-            'fields': ('receipt_number', 'status', 'amount', 'transaction_number', 'payment_date', 'concept'),
+        ('Información Principal', {
+            'fields': ('receipt_number', 'status', 'anulado', 'payment_date', 'concept')
         }),
-        ('Datos del Cliente', {
-            'fields': ('client_name', 'client_id', 'client_address'),
+        ('Detalles del Cliente', {
+            'fields': ('client_name', 'client_id', 'client_address')
+        }),
+        ('Detalles Financieros', {
+            'fields': ('amount', 'transaction_number')
         }),
         ('Categorías (Regularización)', {
-            'fields': ('categoria1', 'categoria2', 'categoria3', 'categoria4', 'categoria5', 'categoria6', 'categoria7', 'categoria8', 'categoria9', 'categoria10'),
-            'classes': ('collapse',), # Oculta las categorías por defecto
+            'fields': ('categoria1', 'categoria2', 'categoria3', 'categoria4', 'categoria5', 'categoria6', 'categoria7', 'categoria8', 'categoria9', 'categoria10')
         }),
         ('Auditoría', {
-            'fields': ('created_by', 'created_at'),
-            'classes': ('collapse',),
+            'fields': ('created_by', 'usuario_anulo', 'fecha_anulacion')
         }),
     )
+    
+    # Auto-completar el campo created_by con el usuario actual
+    def save_model(self, request, obj, form, change):
+        if not obj.pk: # Solo si es un objeto nuevo
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
-# Registra el modelo Receipt con la configuración personalizada
+# ====================================================================
+# Registro de Modelos
+# ====================================================================
+
+# 1. Registrar el usuario personalizado con la configuración CustomUserAdmin
+admin.site.register(CustomUser, CustomUserAdmin)
+
+# 2. Registrar el modelo Recibo
 admin.site.register(Receipt, ReceiptAdmin)

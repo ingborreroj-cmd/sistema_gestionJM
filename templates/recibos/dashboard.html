@@ -1,0 +1,273 @@
+{% extends "recibos/base.html" %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block sub_title %}
+<p class="text-sm text-gray-500">Bienvenido, <span class="font-semibold text-indigo-700">{{ user.first_name|default:user.username }}</span>. Tu rol es: <span class="font-semibold text-indigo-700">{{ user.rol|capfirst }}</span>.</p>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- SECCIÓN 1: Tarjetas de Resumen (Django Context) -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        
+        <!-- Card 1: Recibos Totales -->
+        <div class="bg-white overflow-hidden shadow-lg rounded-xl border-l-4 border-indigo-500 hover:shadow-2xl transition duration-300">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-indigo-500 rounded-full p-3 shadow-md">
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Total de Recibos</dt>
+                            <dd>
+                                <div class="text-3xl font-extrabold text-gray-900">{{ total_recibos|default:0 }}</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+                <div class="text-sm">
+                    <a href="{% url 'receipts_list' %}" class="font-medium text-indigo-600 hover:text-indigo-900 transition duration-150 flex items-center">
+                        Ver todos los recibos
+                        <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Recibos Válidos (Pendientes de Anulación) -->
+        <div class="bg-white overflow-hidden shadow-lg rounded-xl border-l-4 border-green-500 hover:shadow-2xl transition duration-300">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-green-500 rounded-full p-3 shadow-md">
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.276A1.89 1.89 0 0118.9 4.382h-13.8a1.89 1.89 0 01-1.718-1.528A1.89 1.89 0 012.382 7.098v9.804c0 .857.694 1.551 1.551 1.551h14.134c.857 0 1.551-.694 1.551-1.551V7.098a1.89 1.89 0 01-.295-.876z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Recibos Válidos</dt>
+                            <dd>
+                                <div class="text-3xl font-extrabold text-gray-900">{{ recibos_pendientes|default:0 }}</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+                <div class="text-sm">
+                    <a href="{% url 'upload_data' %}" class="font-medium text-green-600 hover:text-green-900 transition duration-150 flex items-center">
+                        Cargar más datos
+                        <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Recibos Anulados -->
+        <div class="bg-white overflow-hidden shadow-lg rounded-xl border-l-4 border-red-500 hover:shadow-2xl transition duration-300">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-red-500 rounded-full p-3 shadow-md">
+                        <svg class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 truncate">Recibos Anulados</dt>
+                            <dd>
+                                <div class="text-3xl font-extrabold text-gray-900">{{ recibos_anulados|default:0 }}</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-5 py-3">
+                <div class="text-sm">
+                    <a href="{% url 'receipts_list' %}?anulado=True" class="font-medium text-red-600 hover:text-red-900 transition duration-150 flex items-center">
+                        Revisar anulaciones
+                        <svg class="ml-1 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: Recibos Recientes (Cargados por Firestore) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Panel de Gráfico (Simulación) -->
+        <div class="bg-white shadow-lg rounded-xl p-6">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">Gasto Mensual (Simulado)</h3>
+            <!-- Aquí iría un gráfico real, usamos un placeholder SVG por simplicidad -->
+            <div class="flex justify-center items-center h-48 bg-gray-50 rounded-lg">
+                <svg viewBox="0 0 100 50" class="w-full h-40">
+                    <polyline fill="none" stroke="#4F46E5" stroke-width="2" points="0,40 25,10 50,35 75,20 100,45" />
+                    <circle cx="25" cy="10" r="2" fill="#4F46E5" />
+                    <circle cx="75" cy="20" r="2" fill="#4F46E5" />
+                    <text x="2" y="48" class="text-xs text-gray-500">Ene</text>
+                    <text x="27" y="48" class="text-xs text-gray-500">Feb</text>
+                    <text x="52" y="48" class="text-xs text-gray-500">Mar</text>
+                    <text x="77" y="48" class="text-xs text-gray-500">Abr</text>
+                    <text x="98" y="48" class="text-xs text-gray-500">Hoy</text>
+                </svg>
+            </div>
+            <p class="text-sm text-gray-500 mt-4 text-center">Simulación del flujo de gastos de los últimos 5 meses.</p>
+        </div>
+
+        <!-- Panel de Lista de Recibos Recientes -->
+        <div class="bg-white shadow-lg rounded-xl p-6">
+            <h3 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4 flex justify-between items-center">
+                Recibos Recientes (Tiempo Real)
+                <span id="receipt-count" class="text-sm font-normal text-indigo-500">Cargando...</span>
+            </h3>
+            
+            <div id="recent-receipts-list" class="space-y-4 h-64 overflow-y-auto pr-2">
+                <!-- Los recibos se inyectarán aquí por JavaScript (Firestore) -->
+                <div id="loading-indicator" class="text-center py-10 text-gray-500">
+                    <svg class="animate-spin mx-auto h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Cargando datos en tiempo real...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content_footer %}
+<script type="module">
+    // Definición de las variables globales que se inyectan en el entorno
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // Importaciones de Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, query, limit, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    
+    let app, db, auth, userId;
+    let isAuthReady = false;
+
+    if (firebaseConfig) {
+        setLogLevel('Debug');
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        
+        // Autenticación y obtención de userId
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Error en la autenticación de Firebase:", error);
+                    return;
+                }
+            }
+            userId = auth.currentUser ? auth.currentUser.uid : 'anonymous-user';
+            isAuthReady = true;
+            fetchRecentReceipts();
+        });
+    }
+
+    const receiptsList = document.getElementById('recent-receipts-list');
+    const receiptCount = document.getElementById('receipt-count');
+    const loadingIndicator = document.getElementById('loading-indicator');
+
+    // Función principal para obtener los datos de Firestore en tiempo real
+    function fetchRecentReceipts() {
+        if (!isAuthReady || !userId || !db) {
+            console.warn("Firestore no está listo para la consulta.");
+            return;
+        }
+
+        // Ruta de la colección: /artifacts/{appId}/users/{userId}/receipts
+        const receiptsPath = `artifacts/${appId}/users/${userId}/receipts`;
+        const receiptsCol = collection(db, receiptsPath);
+
+        // Consulta: Obtener los últimos 5 recibos subidos
+        // NOTA: Para obtener los 'últimos' deberíamos usar orderBy('uploadDate', 'desc'),
+        // pero la directiva es evitar orderBy. En su lugar, obtendremos todos (o limitados)
+        // y los ordenaremos en el cliente para evitar problemas de índice.
+        const q = query(receiptsCol, limit(5)); // Limitar para no cargar demasiado
+
+        console.log(`Escuchando recibos para el usuario: ${userId} en ${receiptsPath}`);
+
+        // Establecer el listener de tiempo real (onSnapshot)
+        onSnapshot(q, (snapshot) => {
+            const receipts = [];
+            snapshot.forEach((doc) => {
+                const data = doc.data();
+                receipts.push(data);
+            });
+            
+            // Ordenar los recibos por la fecha de subida (simulada) en el cliente
+            receipts.sort((a, b) => new Date(b.uploadDate) - new Date(a.uploadDate));
+
+            renderReceipts(receipts);
+
+        }, (error) => {
+            console.error("Error al escuchar los recibos:", error);
+            receiptsList.innerHTML = `<p class="text-center py-10 text-red-500">Error al cargar datos: ${error.message}</p>`;
+            receiptCount.textContent = "Error";
+        });
+    }
+
+    // Función para renderizar los recibos en la UI
+    function renderReceipts(receipts) {
+        loadingIndicator.classList.add('hidden');
+        receiptsList.innerHTML = '';
+        receiptCount.textContent = `(${receipts.length} recientes)`;
+
+        if (receipts.length === 0) {
+            receiptsList.innerHTML = `
+                <div class="text-center py-10 text-gray-500 bg-gray-50 rounded-lg p-4">
+                    <p class="font-medium">¡No hay recibos recientes!</p>
+                    <p class="text-sm mt-1">Sube el primero desde <a href="{% url 'upload_data' %}" class="text-indigo-600 hover:text-indigo-800">aquí</a>.</p>
+                </div>
+            `;
+            return;
+        }
+
+        receipts.forEach(receipt => {
+            // Formatear la fecha
+            const date = new Date(receipt.uploadDate);
+            const dateString = date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            const timeString = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+
+            const item = document.createElement('div');
+            item.className = 'flex justify-between items-center p-4 bg-white rounded-lg shadow-md hover:bg-gray-50 transition duration-150 border-l-4 border-indigo-400';
+            
+            // Usamos los datos simulados guardados en upload_data.html
+            const total = receipt.dataExtracted?.simulatedTotal || 'N/A';
+            const vendor = receipt.dataExtracted?.simulatedVendor || receipt.fileName;
+
+            item.innerHTML = `
+                <div class="flex-1 min-w-0">
+                    <p class="text-base font-semibold text-gray-800 truncate" title="${vendor}">${vendor}</p>
+                    <p class="text-xs text-gray-500 mt-1 truncate">${receipt.fileName}</p>
+                </div>
+                <div class="text-right ml-4">
+                    <p class="text-lg font-bold text-green-600">${parseFloat(total).toFixed(2)} €</p>
+                    <p class="text-xs text-gray-400">${dateString} ${timeString}</p>
+                </div>
+            `;
+            receiptsList.appendChild(item);
+        });
+    }
+
+    // Nota: La lógica de `fetchRecentReceipts` se ejecuta una vez que onAuthStateChanged ha completado su ciclo.
+</script>
+{% endblock %}

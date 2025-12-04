@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - Sistema de Recibos</title>
+    <!-- Carga de Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+
+    <div class="w-full max-w-md p-6 sm:p-8 bg-white rounded-xl shadow-2xl transition duration-300 hover:shadow-3xl">
+        
+        <!-- Logo o Título de la Aplicación -->
+        <div class="text-center mb-6">
+            <svg class="mx-auto h-10 w-auto text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <h2 class="mt-4 text-3xl font-extrabold text-gray-900">
+                Bienvenido de vuelta
+            </h2>
+            <p class="mt-2 text-sm text-gray-600">
+                Inicia sesión en tu cuenta
+            </p>
+        </div>
+
+        <!-- Manejo de Errores de Django -->
+        {% if form.errors %}
+            <div role="alert" class="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
+                Tu nombre de usuario y contraseña no coinciden. Por favor, inténtalo de nuevo.
+            </div>
+        {% endif %}
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div role="alert" class="p-3 mb-4 text-sm {% if message.tags == 'success' %}text-green-700 bg-green-100{% elif message.tags == 'warning' %}text-yellow-700 bg-yellow-100{% else %}text-blue-700 bg-blue-100{% endif %} rounded-lg">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+
+        <form class="space-y-6" action="{% url 'login' %}" method="POST">
+            {% csrf_token %}
+            
+            <!-- Campo de Nombre de Usuario -->
+            <div>
+                <label for="id_username" class="block text-sm font-medium text-gray-700">
+                    Nombre de Usuario
+                </label>
+                <div class="mt-1">
+                    <input id="id_username" name="username" type="text" required autofocus
+                        class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        placeholder="Ej: usuario123">
+                </div>
+            </div>
+
+            <!-- Campo de Contraseña -->
+            <div>
+                <label for="id_password" class="block text-sm font-medium text-gray-700">
+                    Contraseña
+                </label>
+                <div class="mt-1">
+                    <input id="id_password" name="password" type="password" required
+                        class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        placeholder="Ingresa tu contraseña">
+                </div>
+            </div>
+
+            <!-- Acción de Enviar -->
+            <div>
+                <button type="submit"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Iniciar Sesión
+                </button>
+            </div>
+            
+            <!-- Campo oculto para manejar la redirección post-login -->
+            {% if next %}
+                <input type="hidden" name="next" value="{{ next }}" />
+            {% endif %}
+        </form>
+
+        <!-- Enlace de ayuda (opcional) -->
+        <div class="mt-6">
+            <p class="text-center text-sm text-gray-500">
+                ¿Problemas para acceder?
+                <a href="#" class="font-medium text-indigo-600 hover:text-indigo-500">
+                    Contacta a tu administrador
+                </a>
+            </p>
+        </div>
+
+    </div>
+
+</body>
+</html>

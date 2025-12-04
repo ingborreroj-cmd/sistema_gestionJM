@@ -1,285 +1,330 @@
 import pandas as pd
-from datetime import datetime
-import textwrap
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.utils import ImageReader
+import io
+import re
+from datetime import datetime, date
+from django.db import transaction, models
+from django.utils import timezone
 from django.conf import settings
-import os
-from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas as pdf_canvas
+from reportlab.lib.units import inch
+from reportlab.lib import colors
 
-# --- Funciones de Utilidad de Procesamiento de Excel ---
+# Importaciones del modelo (Asumiendo que están en la misma app)
+from .models import Receipt
 
-def is_marked(val):
-    """
-    Verifica si el valor de una celda de Excel debe interpretarse como 'marcado' (True).
-    Busca 'X', '1', 'True', 'Si', etc., ignorando mayúsculas y espacios.
-    """
-    if pd.isna(val):
+# ====================================================================
+# Funciones Auxiliares para Limpieza y Conversión de Datos
+# ====================================================================
+
+def clean(value):
+    """Limpia valores de Pandas: convierte NaN a None y maneja tipos."""
+    if pd.isna(value) or value is None:
+        return None
+    # Eliminar espacios extra y convertir a cadena, excepto para números
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+def is_marked(value):
+    """Verifica si un valor en la columna de categoría debe ser True (X, x, 1, True, Yes, etc.)."""
+    if clean(value) is None:
         return False
-    val_str = str(val).strip().lower()
-    return val_str in ['x', '1', 'true', 'si', 'sí', 'yes', 'check', '✓']
+    # Convertir a minúsculas y verificar
+    s = str(value).strip().lower()
+    return s in ['x', '1', 'true', 'yes', 'si']
 
-def clean(val):
+def format_date_for_db(date_value):
     """
-    Limpia y normaliza el valor de una celda de Excel a una cadena de texto.
-    Devuelve una cadena vacía si es NaN o None.
+    Convierte varios formatos de fecha (Excel, datetime, string) a objeto date de Python.
+    
+    Args:
+        date_value: Valor de fecha de la columna Excel.
+    
+    Returns:
+        datetime.date o None.
     """
-    if pd.isna(val) or val is None:
-        return ""
-    # Aseguramos que el valor sea string antes de hacer strip
-    return str(val).strip()
+    if clean(date_value) is None:
+        return None
+    
+    # Caso 1: Ya es un objeto datetime.date/datetime
+    if isinstance(date_value, (datetime, date)):
+        return date_value
+        
+    # Caso 2: Es un string, intentar parsear
+    if isinstance(date_value, str):
+        # Intentar formatos comunes (d/m/y, m/d/y, y-m-d)
+        for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y'):
+            try:
+                # split()[0] ignora la hora si está presente
+                return datetime.strptime(date_value.split()[0], fmt).date() 
+            except (ValueError, TypeError):
+                continue
 
-def format_date_for_db(fecha_str):
+    # Caso 3: Es un número de serie de Excel (float o int)
+    if isinstance(date_value, (int, float)):
+        try:
+            # Excel usa el 1 de enero de 1900 como día 1.
+            return (datetime(1899, 12, 30) + timezone.timedelta(days=date_value)).date()
+        except OverflowError:
+            return None # Fecha fuera de rango
+
+    return None
+
+# ====================================================================
+# Funciones de Lógica de Negocio (Movida aquí para evitar circularidad)
+# ====================================================================
+
+def get_next_receipt_number():
     """
-    Convierte una cadena o tipo de fecha (Date/Timestamp) a formato 'YYYY-MM-DD' (PostgreSQL).
-    Acepta múltiples formatos de entrada y usa la fecha actual si falla la conversión.
+    Obtiene el siguiente número de recibo consecutivo.
+    
+    Busca el recibo con el número más alto y devuelve el siguiente.
+    Si no hay recibos, comienza en 1.
     """
     try:
-        if isinstance(fecha_str, str) and fecha_str.strip():
-            # Intentar analizar formatos comunes (DD/MM/YYYY, YYYY-MM-DD, etc.)
-            for fmt in ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%y']:
+        # Se asume que receipt_number es un string que representa un número, 
+        # y que se puede ordenar lexicográficamente o se convierte a int.
+        # Es mejor convertir a INT si el formato es solo numérico.
+        last_receipt = Receipt.objects.aggregate(models.Max('receipt_number'))
+        max_number_str = last_receipt['receipt_number__max']
+        
+        if max_number_str:
+            # Asumiendo que el número es puramente numérico (ej: "000001")
+            last_number = int(max_number_str)
+            next_number = last_number + 1
+            # Formatear a 6 dígitos con relleno de ceros
+            return f"{next_number:06d}" 
+        else:
+            # Primer recibo
+            return "000001"
+            
+    except ValueError:
+        # Si la conversión a int falla (por ejemplo, si el número incluye letras)
+        # Se podría implementar una lógica de parsing más compleja aquí.
+        # Para evitar el error, devolvemos un número de inicio por defecto
+        # y registramos el error en el log.
+        print("ERROR: Los números de recibo no son puramente numéricos. Reiniciando a 1.")
+        return "000001"
+    except Exception as e:
+        print(f"ERROR al obtener el siguiente número de recibo: {e}")
+        return "000001"
+
+
+# ====================================================================
+# 1. Procesamiento del Archivo Excel
+# ====================================================================
+
+def process_uploaded_excel(excel_file, user):
+    """
+    Lee el archivo Excel, valida las columnas y crea recibos.
+
+    Args:
+        excel_file: Objeto UploadedFile de Django (el archivo excel).
+        user: El CustomUser que subió el archivo.
+
+    Returns:
+        (int, int): Contador de recibos exitosos y contador de errores.
+    """
+    
+    # Columnas esperadas en el archivo Excel (en minúsculas para coincidir con la limpieza)
+    EXPECTED_COLUMNS = [
+        'n_transferencia', 'fecha_pago', 'rif_ci', 'nombre_cliente', 
+        'monto', 'concepto', 'direccion_cliente',
+    ]
+
+    # Añadir las columnas de categoría
+    for i in range(1, 11):
+        EXPECTED_COLUMNS.append(f'cat_{i}')
+        
+    success_count = 0
+    error_count = 0
+    
+    try:
+        # Leer el archivo excel a un buffer de BytesIO
+        excel_data = io.BytesIO(excel_file.read())
+        
+        # Intentar leer el archivo con Pandas
+        df = pd.read_excel(excel_data, sheet_name=0)
+        
+        # 1. Limpieza de nombres de columnas: convertir a minúsculas y simplificar
+        df.columns = df.columns.str.lower().str.strip()
+        df.columns = df.columns.str.replace(r'[^a-z0-9_]', '', regex=True)
+        df.columns = df.columns.str.replace(r'\s+', '_', regex=True)
+
+        # 2. Renombrar columnas a un formato estándar
+        column_mapping = {
+            # Asume nombres comunes en español/inglés y mapea al estándar interno
+            'n_transferencia': 'transaction_number', 'transferencia': 'transaction_number',
+            'fecha_pago': 'payment_date', 'fecha': 'payment_date',
+            'rif_ci': 'client_id', 'rif': 'client_id', 'ci': 'client_id', 'id': 'client_id',
+            'nombre_cliente': 'client_name', 'cliente': 'client_name', 'nombre': 'client_name',
+            'monto': 'amount', 
+            'concepto': 'concept',
+            'direccion_cliente': 'client_address', 'direccion': 'client_address',
+        }
+        
+        # Mapeo de categorías
+        for i in range(1, 11):
+            column_mapping[f'cat_{i}'] = f'categoria{i}'
+            column_mapping[f'categoria_{i}'] = f'categoria{i}'
+            column_mapping[f'cat{i}'] = f'categoria{i}'
+            column_mapping[f'c{i}'] = f'categoria{i}'
+            
+        df.rename(columns=column_mapping, inplace=True)
+
+        # 3. Validar que al menos las columnas críticas existan después del mapeo
+        CRITICAL_COLUMNS = ['payment_date', 'client_name', 'amount']
+        if not all(col in df.columns for col in CRITICAL_COLUMNS):
+            raise ValueError(f"El archivo Excel debe contener las columnas: {', '.join(CRITICAL_COLUMNS)}.")
+
+        # 4. Procesar cada fila en una transacción atómica
+        with transaction.atomic():
+            
+            # NOTA: Se eliminó la importación local de .views para resolver la circularidad.
+            
+            for index, row in df.iterrows():
                 try:
-                    fecha_obj = datetime.strptime(fecha_str.strip(), fmt)
-                    return fecha_obj.strftime('%Y-%m-%d')
-                except ValueError:
-                    continue
-        if isinstance(fecha_str, (pd.Timestamp, datetime)):
-            return fecha_str.strftime('%Y-%m-%d')
-        # Fallback a la fecha actual si no se puede parsear
-        return datetime.now().strftime('%Y-%m-%d')
-    except:
-        return datetime.now().strftime('%Y-%m-%d')
+                    # Preparar los datos
+                    data = {}
+                    
+                    # Campos obligatorios y clave
+                    # Ahora llama a la función localmente definida en este módulo
+                    data['receipt_number'] = get_next_receipt_number() 
+                    data['created_by'] = user
+                    data['payment_date'] = format_date_for_db(row.get('payment_date'))
+                    data['client_name'] = clean(row.get('client_name'))
+                    data['amount'] = clean(row.get('amount'))
 
-# --- Funciones de Generación de PDF (usando ReportLab) ---
+                    # Validar campos críticos
+                    if not all([data['payment_date'], data['client_name'], data['amount']]):
+                        raise ValueError("Fila incompleta: Faltan Fecha de Pago, Nombre o Monto.")
+                    
+                    # Campos opcionales
+                    data['transaction_number'] = clean(row.get('transaction_number'))
+                    data['client_id'] = clean(row.get('client_id'))
+                    data['concept'] = clean(row.get('concept'))
+                    data['client_address'] = clean(row.get('client_address'))
 
-def format_currency(value):
+                    # Campos de Categoría (booleanos)
+                    for i in range(1, 11):
+                        field_name = f'categoria{i}'
+                        # Usa .get() para manejar si la columna no existe en el archivo
+                        data[field_name] = is_marked(row.get(field_name, False))
+
+                    # Crear el objeto Receipt
+                    Receipt.objects.create(**data)
+                    success_count += 1
+                    
+                except Exception as e:
+                    # Este print registra el error en consola para auditoría
+                    print(f"Error al procesar la fila {index + 2}: {e}") # index + 2 (header + 1-based index)
+                    error_count += 1
+                    
+    except Exception as e:
+        # Este catch maneja errores de I/O, lectura de Pandas, o validación de encabezados
+        print(f"Error fatal al procesar el archivo: {e}")
+        # Intentar obtener el número de filas para el error_count si 'df' existe
+        error_count = df.shape[0] if 'df' in locals() and not df.empty else 0 
+        return (0, error_count) 
+
+    return (success_count, error_count)
+
+
+# ====================================================================
+# 2. Generación de PDF
+# ====================================================================
+
+def generate_receipt_pdf(receipt):
     """
-    Formatea un valor numérico a Bs. con separador de miles (punto) y
-    dos decimales (coma), siguiendo el formato venezolano.
+    Genera un PDF para el objeto Receipt dado.
     """
-    try:
-        # Limpiar y convertir a float
-        cleaned = ''.join(c for c in str(value) if c.isdigit() or c in ',.')
-        cleaned = cleaned.replace(',', '.') 
-        amount = float(cleaned)
-        
-        # Formatear: punto como separador de miles, coma como decimal
-        formatted = "{:,.2f}".format(amount).replace(",", "X").replace(".", ",").replace("X", ".")
-        return formatted
-    except (ValueError, TypeError):
-        return str(value) if value else "0,00"
+    buffer = io.BytesIO()
+    c = pdf_canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
 
-def draw_wrapped_text(c, text, x, y, max_width, max_lines=3, font_size=9, is_bold=False, line_height=12):
-    """
-    Dibuja texto con ajuste de línea (word wrap) dentro de un ancho máximo.
-    """
-    if is_bold:
-        c.setFont("Helvetica-Bold", font_size)
-    else:
-        c.setFont("Helvetica", font_size)
+    # --- Configuración General ---
+    padding = inch * 0.5
+    line_height = 0.25 * inch
     
-    # [.. Implementación de draw_wrapped_text, igual a la del draft anterior ..]
-    chars_per_line = int(max_width / (font_size * 0.6))
-    wrapper = textwrap.TextWrapper(width=chars_per_line)
-    lines = []
+    # --- Encabezado ---
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, height - padding, "COMPROBANTE DE PAGO / RECIBO")
+
+    # --- Título del Recibo (Derecha) ---
+    c.setFont("Helvetica-Bold", 14)
+    c.setFillColor(colors.red)
+    c.drawString(width - padding - 2*inch, height - padding - line_height*0.5, f"N° {receipt.receipt_number}")
+    c.setFillColor(colors.black)
     
-    for line in text.split('\n'):
-        lines.extend(wrapper.wrap(line))
-    
-    if len(lines) > max_lines:
-        lines = lines[:max_lines]
-        lines[-1] = lines[-1][:chars_per_line-3] + "..."
-    
-    for i, line in enumerate(lines):
-        c.drawString(x, y - (i * line_height), line)
-    
-    return y - (len(lines) * line_height)
-
-def draw_wrapped_name(c, text, x, y, max_width, font_size=10, is_bold=False, line_height=12):
-    """
-    Dibuja texto ajustado, centrado horizontalmente (usado para nombres de firma).
-    """
-    # [.. Implementación de draw_wrapped_name, igual a la del draft anterior ..]
-    if is_bold:
-        c.setFont("Helvetica-Bold", font_size)
-    else:
-        c.setFont("Helvetica", font_size)
-    
-    chars_per_line = int(max_width / (font_size * 0.6))
-    wrapper = textwrap.TextWrapper(width=chars_per_line)
-    lines = wrapper.wrap(text)
-    
-    for i, line in enumerate(lines):
-        line_width = c.stringWidth(line, "Helvetica-Bold" if is_bold else "Helvetica", font_size)
-        centered_x = x + (max_width - line_width) / 2
-        c.drawString(centered_x, y - (i * line_height), line)
-    
-    return y - (len(lines) * line_height)
-
-def generate_receipt_pdf(receipt_data):
-    """
-    Genera el recibo PDF completo a partir de una instancia del modelo Receipt (Recibo).
-    Utiliza el motor ReportLab y la configuración de diseño del código original.
-    El resultado se devuelve como un buffer BytesIO (archivo en memoria).
-    """
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter 
-    
-    # Desempaquetar datos del objeto Receipt (models.py)
-    nombre = receipt_data.client_name
-    cedula = receipt_data.client_id
-    direccion = receipt_data.client_address
-    monto = receipt_data.amount
-    num_transf = receipt_data.transaction_number
-    fecha = receipt_data.payment_date.strftime('%d/%m/%Y') 
-    concepto = receipt_data.concept
-    estado = receipt_data.status
-    num_recibo = receipt_data.receipt_number
-    categorias = receipt_data.get_categories_dict()
-    
-    monto_formateado = format_currency(monto)
-
-    # Nota: Asume que tienes una carpeta static/images/ con un logo
-    HEADER_IMAGE_PATH = os.path.join(settings.BASE_DIR, 'static', 'images', 'header_logo.png') 
-    
-    # === ENCABEZADO Y LOGO (Lógica de dibujo igual a la anterior) ===
-    current_y = height - 50
-    try:
-        # [.. Lógica de dibujo de logo ..]
-        if os.path.exists(HEADER_IMAGE_PATH):
-            img = ImageReader(HEADER_IMAGE_PATH)
-            img_width, img_height = img.getSize()
-            scale = min(1.0, 480 / img_width) 
-            draw_width = img_width * scale
-            draw_height = img_height * scale
-            x_center = (width - draw_width) / 2
-            y_top = height - draw_height - 20
-            c.drawImage(HEADER_IMAGE_PATH, x=x_center, y=y_top, width=draw_width, height=draw_height)
-            current_y = y_top - 25
-    except Exception:
-        c.setFont("Helvetica-Bold", 18)
-        c.drawCentredString(width / 2, height - 40, "LOGO INSTITUCIONAL")
-        current_y = height - 80
-
-    c.setFont("Helvetica-Bold", 13)
-    titulo_texto = "RECIBO DE PAGO"
-    titulo_width = c.stringWidth(titulo_texto, "Helvetica-Bold", 13)
-    titulo_x = (width - titulo_width) / 2
-    c.drawString(titulo_x, current_y, titulo_texto)
-    current_y -= 25
-
-    # [.. Dibujo de campos de datos ..]
-    draw_wrapped_text(c, "Estado:", 60, current_y, max_width=80, max_lines=2, is_bold=True)
-    c.setFont("Helvetica", 9); c.drawString(140, current_y, estado)
-    draw_wrapped_text(c, "Nº Recibo:", 310, current_y, max_width=150, max_lines=2, is_bold=True)
-    c.setFont("Helvetica", 9); c.drawString(470, current_y, num_recibo)
-    current_y -= 25
-
-    draw_wrapped_text(c, "Recibí de:", 60, current_y, max_width=80, max_lines=2, is_bold=True)
-    draw_wrapped_text(c, nombre, 140, current_y, max_width=150, max_lines=8)
-    draw_wrapped_text(c, "Monto Recibido (Bs.):", 310, current_y, max_width=150, max_lines=2, is_bold=True)
-    c.setFont("Helvetica", 9); c.drawString(470, current_y, monto_formateado)
-    current_y -= 30
-
-    draw_wrapped_text(c, "Rif/C.I:", 60, current_y, max_width=120, max_lines=2, is_bold=True)
-    draw_wrapped_text(c, cedula, 140, current_y, max_width=120, max_lines=4)
-    draw_wrapped_text(c, "Nº Transferencia:", 310, current_y, max_width=150, max_lines=2, is_bold=True)
-    draw_wrapped_text(c, num_transf, 470, current_y, max_width=100, max_lines=2)
-    current_y -= 30
-
-    draw_wrapped_text(c, "Dirección:", 60, current_y, max_width=80, max_lines=2, is_bold=True)
-    draw_wrapped_text(c, direccion, 140, current_y, max_width=150, max_lines=3)
-    draw_wrapped_text(c, "Fecha:", 310, current_y, max_width=50, max_lines=1, is_bold=True)
-    c.setFont("Helvetica", 9); c.drawString(470, current_y, fecha)
-    current_y -= 30
-
-    draw_wrapped_text(c, "Concepto:", 60, current_y, max_width=80, max_lines=2, is_bold=True)
-    draw_wrapped_text(c, concepto, 140, current_y, max_width=400, max_lines=3)
-    current_y -= 40
-
-    # === SECCIÓN DE CATEGORÍAS ===
-    if any(categorias.values()):
-        draw_wrapped_text(c, "FORMA DE PAGO Y DESCRIPCION DE LA REGULARIZACION", 60, current_y, max_width=500, max_lines=2, is_bold=True)
-        current_y -= 25
-
-        def draw_category(y, title, description, category_key):
-            """Función auxiliar para dibujar una categoría si está marcada."""
-            if categorias.get(category_key):
-                c.setFont("Helvetica-Bold", 9)
-                c.drawString(60, y, title)
-                c.drawString(520, y, "X")
-                y -= 14
-                c.setFont("Helvetica", 8)
-                c.drawString(60, y, description)
-                y -= 20
-            return y
-        
-        # [.. Dibujo de las 10 categorías ..]
-        current_y = draw_category(current_y, "TITULO DE TIERRA URBANA- TITULO DE ADJUDICACION EN PROPIEDAD", "Una milésima de Bolívar, Art. 58 de la Ley Especial de Regularización", 'categoria1')
-        current_y = draw_category(current_y, "TITULO DE TIERRA URBANA-TITULO DE ADJUDICACION MAS VIVIENDA", "Una milésima de Bolívar, más gastos administrativos(140 unidades ancladas a la moneda de mayor valor estipulada por el BCV)", 'categoria2')
-        current_y = draw_category(current_y, "VIVIENDA UNIFAMILIAR Y MULTIFAMILIAR(EDIFICIOS) TIERRA: Municipal", "Precio: Gastos Administrativos(140 unidades ancladas a la moneda de mayor valor estipulada por el BCV)", 'categoria3')
-        current_y = draw_category(current_y, "VIVIENDA UNIFAMILIAR Y MULTIFAMILIAR(EDIFICIOS) TIERRA: Tierra Privada", "Precio: Gastos Administrativos(140 unidades ancladas a la moneda de mayor valor estipulada por el BCV)", 'categoria4')
-        current_y = draw_category(current_y, "VIVIENDA UNIFAMILIAR Y MULTIFAMILIAR(EDIFICIOS) TIERRA: Tierra INAVI o de cualquier Ente transferido al INTU", "Precio: Gastos Administrativos(140 unidades ancladas a la moneda de mayor valor estipulada por el BCV)", 'categoria5')
-        current_y = draw_category(current_y, "EXCEDENTES: Con título de Tierra Urbana, hasta 400 mt2 una milésima por mt2", "Según el Art 33 de la Ley Especial de Regularización", 'categoria6')
-        current_y = draw_category(current_y, "Con Título INAVI(Gastos Administrativos):", "140 unidades ancladas a la moneda de mayor valor estipulada por el BCV)", 'categoria7')
-        current_y = draw_category(current_y, "ESTUDIOS TÉCNICO:", "Medición detallada de la parcela para obtener representación gráfica(plano)", 'categoria8')
-        current_y = draw_category(current_y, "ARRENDAMIENTOS DE LOCALES COMERCIALES:", "Número de unidades establecidas en el contrato, ancladas a la moneda de mayor valor estipulada por el BCV", 'categoria9')
-        current_y = draw_category(current_y, "ARRENDAMIENTOS DE TERRENOS", "Número de unidades establecidas en el contrato, ancladas a la moneda de mayor valor estipulada por el BCV", 'categoria10')
-        
-    current_y -= 70
-    
-    # === FIRMAS (Lógica de dibujo igual a la anterior) ===
-    if current_y < 150:
-        c.showPage()
-        current_y = height - 100
-
-    line_width = 200
-    left_line_x = (width / 2 - line_width - 20)
-    right_line_x = (width / 2 + 20)
-
-    c.line(left_line_x, current_y, left_line_x + line_width, current_y)
-    c.line(right_line_x, current_y, right_line_x + line_width, current_y)
-
-    # Firma Izquierda (Cliente)
+    # --- Datos de la Compañía (Simulado) ---
     c.setFont("Helvetica", 10)
-    firma_text = "Firma"
-    firma_width = c.stringWidth(firma_text, "Helvetica", 10)
-    firma_x = left_line_x + (line_width - firma_width) / 2
-    c.drawString(firma_x, current_y - 12, firma_text)
-
-    current_y = draw_wrapped_name(c, nombre, left_line_x, current_y - 25, 
-                                max_width=line_width, font_size=10, is_bold=True, line_height=12)
-
-    c.setFont("Helvetica", 9)
-    cedula_text = f"C.I./RIF: {cedula}"
-    cedula_width = c.stringWidth(cedula_text, "Helvetica", 9)
-    cedula_x = left_line_x + (line_width - cedula_width) / 2
-    c.drawString(cedula_x, current_y - 4, cedula_text)
-
-    current_y -= 35 
+    c.drawString(padding, height - padding - line_height * 0.5, "Nombre de la Empresa S.A.")
+    c.drawString(padding, height - padding - line_height * 1.0, "RIF: J-01234567-8")
+    c.drawString(padding, height - padding - line_height * 1.5, "Dirección Fiscal: Calle Ficticia, Ciudad, País.")
     
-    # Firma Derecha (Recibido por)
-    c.setFont("Helvetica", 10)
-    recibido_text = "Recibido por:"
-    recibido_width = c.stringWidth(recibido_text, "Helvetica", 10)
-    recibido_x = right_line_x + (line_width - recibido_width) / 2
-    c.drawString(recibido_x, current_y + 30, recibido_text)
-
+    # --- Bloque de Datos del Cliente (Caja con borde) ---
+    box_y = height - padding - line_height * 2.5
+    c.rect(padding, box_y - line_height * 2.5, width - 2 * padding, line_height * 3, stroke=1)
+    
     c.setFont("Helvetica-Bold", 10)
-    instituto_text = "PRESLEY ORTEGA"
-    instituto_width = c.stringWidth(instituto_text, "Helvetica-Bold", 10)
-    instituto_x = right_line_x + (line_width - instituto_width) / 2
-    c.drawString(instituto_x, current_y + 15, instituto_text)
-
+    c.drawString(padding + 0.1 * inch, box_y + line_height * 0.4, "DATOS DEL CLIENTE:")
+    
     c.setFont("Helvetica", 10)
-    cargo_text = "GERENTE DE ADMINISTRACIÓN Y SERVICIOS"
-    cargo_width = c.stringWidth(cargo_text, "Helvetica", 10)
-    cargo_x = right_line_x + (line_width - cargo_width) / 2
-    c.drawString(cargo_x, current_y, cargo_text)
+    c.drawString(padding + 0.1 * inch, box_y - line_height * 0.2, f"Cliente: {receipt.client_name or 'N/A'}")
+    c.drawString(width / 2, box_y - line_height * 0.2, f"Identificación (RIF/CI): {receipt.client_id or 'N/A'}")
+    c.drawString(padding + 0.1 * inch, box_y - line_height * 0.7, f"Fecha de Pago: {receipt.payment_date.strftime('%d/%m/%Y') if receipt.payment_date else 'N/A'}")
+    c.drawString(width / 2, box_y - line_height * 0.7, f"N° Transferencia: {receipt.transaction_number or 'N/A'}")
 
-    # Finaliza el PDF y lo devuelve en el buffer
+    # --- Detalle de Concepto ---
+    detail_y = box_y - line_height * 3.5
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(padding, detail_y, "CONCEPTO DE PAGO:")
+    
+    c.setFont("Helvetica", 10)
+    # Usar un TextObject para manejar conceptos largos automáticamente
+    textobject = c.beginText(padding, detail_y - line_height * 0.5)
+    textobject.setFont("Helvetica", 10)
+    textobject.setLeading(14)
+    # El contenido del concepto debe estar limpio
+    concept_text = receipt.concept or "Pago por servicios / productos según detalle."
+    textobject.textLines(concept_text)
+    c.drawText(textobject)
+    
+    # --- Monto Total (Gran Destacado) ---
+    amount_y = detail_y - line_height * 3.5 
+    
+    c.setFont("Helvetica-Bold", 18)
+    c.setFillColor(colors.darkgreen)
+    c.drawString(padding, amount_y, "MONTO TOTAL:")
+    
+    # Formateo de monto
+    formatted_amount = f"Bs. {receipt.amount:,.2f}" if isinstance(receipt.amount, (int, float, models.DecimalField)) else "N/A"
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(width - padding - 3*inch, amount_y, formatted_amount)
+    c.setFillColor(colors.black)
+    
+    # --- Pie de Página (Estado) ---
+    footer_y = padding 
+    
+    # Info de creación
+    created_by_username = receipt.created_by.username if receipt.created_by else 'Sistema'
+    c.setFont("Helvetica", 8)
+    c.drawString(padding, footer_y + line_height * 0.5, f"Documento generado por {created_by_username} el {receipt.created_at.strftime('%d/%m/%Y %H:%M')}")
+
+    # Marca de ANULADO
+    if receipt.anulado:
+        c.setFillColor(colors.red)
+        c.setFont("Helvetica-Bold", 36)
+        c.drawCentredString(width / 2, height / 2, "ANULADO")
+        c.setFont("Helvetica", 10)
+        
+        anulado_by_username = receipt.usuario_anulo.username if receipt.usuario_anulo else 'N/A'
+        fecha_anulacion_str = receipt.fecha_anulacion.strftime('%d/%m/%Y %H:%M') if receipt.fecha_anulacion else 'N/A'
+        
+        c.drawString(padding, footer_y, f"Anulado por {anulado_by_username} el {fecha_anulacion_str}")
+        
+    c.showPage()
     c.save()
-    buffer.seek(0)
-    return buffer
+    
+    return buffer.getvalue()
