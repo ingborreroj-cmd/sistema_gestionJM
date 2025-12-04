@@ -52,7 +52,11 @@ ROOT_URLCONF = 'sistema_gestion.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'], # <-- ¡Añade esta línea!
+        # DIRS: Busca plantillas globales (base.html, landing_page.html, registration/login.html)
+        # en la carpeta raíz del proyecto (SISTEMA_GESTION-MAIN/templates/)
+        'DIRS': [BASE_DIR / 'templates'], 
+        
+        # APP_DIRS: Busca plantillas específicas de la aplicación (apps/recibos/templates/recibos/...)
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -91,14 +95,19 @@ DATABASES = {
 # 3. AUTENTICACIÓN Y LOCALIZACIÓN
 # -----------------------------------------------------------------
 
-# ¡CRÍTICO! Usar el nombre CORTO de la app (app_label) que está definida 
-# en apps/recibos/apps.py para el AUTH_USER_MODEL.
 AUTH_USER_MODEL = 'recibos.CustomUser' 
 
 # Configuración de URLs de autenticación
-LOGIN_URL = 'login' 
+
+# CORRECCIÓN 1: Apuntamos explícitamente a la RUTA '/login/', liberando la ruta raíz '/'
+# Esto asegura que la vista del menú público se cargue primero si el usuario no está logueado.
+LOGIN_URL = '/login/' 
+
+# Esto es correcto: después de iniciar sesión, vamos a la lista de recibos.
 LOGIN_REDIRECT_URL = '/recibos/'
-LOGOUT_REDIRECT_URL = 'login' 
+
+# CORRECCIÓN 2: Después de cerrar sesión, volvemos a la página de menú público (la ruta raíz).
+LOGOUT_REDIRECT_URL = '/' 
 
 AUTH_PASSWORD_VALIDATORS = [
     # ... (Sin cambios)
@@ -117,9 +126,9 @@ USE_TZ = True
 # -----------------------------------------------------------------
 # 4. ARCHIVOS ESTÁTICOS Y MEDIA
 # -----------------------------------------------------------------
-STATIC_URL = '/static/'
+STATIC_URL = 'static/'
 # Usamos la sintaxis moderna con Path
-STATICFILES_DIRS = [BASE_DIR / 'static']
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static'),]
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
