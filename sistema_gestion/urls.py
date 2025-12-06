@@ -17,7 +17,7 @@ urlpatterns = [
     
    
     # -----------------------------------------------------------------
-    path('recibos/', include('apps.recibos.urls', namespace='recibos')), 
+    path('recibos/', include('apps.recibos.urls',)), 
     path('', include('django.contrib.auth.urls')),
     # *****************************************************************
 

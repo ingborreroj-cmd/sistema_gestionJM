@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     # NUEVAS APPS: Añade aquí las nuevas apps que vayas creando
     'apps.recibos.apps.RecibosConfig',
 ]

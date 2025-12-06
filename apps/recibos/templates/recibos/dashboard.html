@@ -3,10 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard | Sistema de Gestión de Recibos</title>
-
+    <title>{% block title %}Dashboard | Sistema de Gestión de Recibos{% endblock title %}</title>
+    {% load static %}
     <script src="https://cdn.tailwindcss.com"></script>
-    
     <script>
         tailwind.config = {
             theme: {
@@ -18,19 +17,15 @@
             },
         }
     </script>
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" integrity="sha512-iBBXm8fW90+z3qfM+M3T9gq8Jj0L/g/L8E2hI2w/h5x+4o2Q3+r3dF6/M/0k8+N/v/Q==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
     <style>
-        /* Estilos para asegurar que el cuerpo use toda la altura y el layout sea flexible */
         body {
             background-color: #f4f7f9;
             min-height: 100vh;
-            display: flex; /* Habilitar Flexbox */
-            flex-direction: column; /* Organizar contenido en columna */
-            padding: 0; /* Quitamos el padding del body, lo agregamos al contenido principal */
+            display: flex;
+            flex-direction: column;
+            padding: 0;
         }
-        /* Estilo para el modal */
         #confirmation-modal.hidden {
             display: none;
         }
@@ -40,260 +35,281 @@
 
     <header class="bg-indigo-700 shadow-lg sticky top-0 z-10">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
-            
-            <a href="[URL_DASHBOARD]" class="flex items-center text-white text-xl font-extrabold tracking-wider">
+            <a href="{% url 'recibos:dashboard' %}" class="flex items-center text-white text-xl font-extrabold tracking-wider">
                 <i class="fas fa-receipt mr-3 text-indigo-300"></i>
                 App Recibos
             </a>
             
-            <nav class="flex items-center space-x-4">
-                <span class="text-sm text-indigo-300 hidden sm:inline">Hola, [NOMBRE_USUARIO]</span>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm text-indigo-300 hidden sm:inline">Hola, {{ user.first_name|default:user.username }}</span>
                 
-                <a href="[URL_LOGOUT]" class="flex items-center px-3 py-1.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
-                    <i class="fas fa-door-open mr-2"></i> Salir
-                </a>
-            </nav>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'logout' %}" class="text-sm text-indigo-300 hover:text-white transition duration-150">
+                        <i class="fas fa-sign-out-alt"></i> Salir
+                    </a>
+                {% endif %}
+            </div>
         </div>
     </header>
+    
     <main class="flex-grow p-4 sm:p-6 lg:p-8">
-        
         <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-white/80 rounded-2xl shadow-xl">
-            <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Dashboard de Recibos</h1>
+            
+            {% block content_title %}
+                <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Dashboard de Recibos</h1>
+            {% endblock content_title %}
 
-            <div class="flex flex-col lg:flex-row gap-6">
+            {% block main_content %}
+                <div class="flex flex-col lg:flex-row gap-6">
 
-                <aside class="w-full lg:w-1/4 space-y-6">
-                    
-                    <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
-                        <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-file-upload mr-2 text-indigo-600"></i> Carga de Archivos</h2>
-                        <form method="post" enctype="multipart/form-data" action="[URL_UPLOAD_EXCEL]" id="upload-form" class="space-y-4">
-                            [CSRF_TOKEN]
-                            <label class="block">
-                                <span class="sr-only">Seleccionar Archivo Excel</span>
-                                <input type="file" name="excel_file" accept=".xlsx" required
-                                             class="block w-full text-sm text-gray-500
-                                                     file:mr-4 file:py-2 file:px-4
-                                                     file:rounded-lg file:border-0
-                                                     file:text-sm file:font-semibold
-                                                     file:bg-indigo-50 file:text-indigo-700
-                                                     hover:file:bg-indigo-100 transition duration-150"
-                                >
-                            </label>
-                            <button type="submit" id="upload-button" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150 disabled:opacity-50" disabled>
-                                <i class="fas fa-upload mr-2"></i> Cargar Datos
-                            </button>
-                        </form>
-                        <p id="upload-status" class="mt-2 text-xs text-gray-500 text-center italic">
-                            Ningún archivo seleccionado.
-                        </p>
-                    </div>
+                    <aside class="w-full lg:w-1/4 space-y-6">
+                        
+                        <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
+                            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-file-upload mr-2 text-indigo-600"></i> Carga de Archivos</h2>
 
-                    <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
-                        <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-magic mr-2 text-green-600"></i> Generación de Recibos</h2>
-                        <form method="post" action="[URL_GENERATE_RECEIPTS]">
-                            [CSRF_TOKEN]
-                            <button type="submit" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition duration-150">
-                                <i class="fas fa-receipt mr-2"></i> Generar Recibos (desde Excel)
-                            </button>
-                        </form>
-                        <p id="generation-status" class="mt-2 text-xs text-gray-500 text-center italic">
-                            Esperando para generar recibos...
-                        </p>
-                    </div>
-                    
-                    <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100 h-96 flex flex-col">
-                        <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-clipboard-list mr-2 text-blue-600"></i> Procesos y Logs</h2>
-                        <div id="log-display" class="flex-grow overflow-y-auto bg-gray-50 p-3 rounded-lg text-xs font-mono border border-gray-200">
-                            <p class="text-gray-500">
-                                Aquí se cargarán los registros de procesos (Logs).
-                            </p>
-                            <p class="mb-1 text-gray-700">
-                                [08:00:00] <span class="text-green-600">✅</span> Proceso de inicio del Dashboard.
-                            </p>
-                            <p class="mb-1 text-gray-700">
-                                [08:01:15] <span class="text-yellow-600">⚠️</span> Advertencia: Filtro de fecha no aplicado.
-                            </p>
-                            <p class="mb-1 text-gray-700">
-                                [08:02:40] <span class="text-red-600">❌</span> Error de conexión con el reporte externo.
-                            </p>
-                            </div>
-                    </div>
-
-                </aside>
-
-                <section class="w-full lg:w-3/4 space-y-6">
-                    
-                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-                        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-filter mr-2 text-purple-600"></i> Módulo de Reportes y Filtrado</h2>
-                        <form method="get" action="[URL_DASHBOARD_FILTRO]" class="space-y-4">
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div>
-                                    <label for="fecha_inicial" class="block text-sm font-medium text-gray-700">Fecha Inicial</label>
-                                    <input type="date" name="fecha_inicial" id="fecha_inicial" value="[VALOR_FECHA_INICIAL]" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                </div>
-                                <div>
-                                    <label for="fecha_final" class="block text-sm font-medium text-gray-700">Fecha Final</label>
-                                    <input type="date" name="fecha_final" id="fecha_final" value="[VALOR_FECHA_FINAL]" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                </div>
-                                <div class="md:col-span-2">
-                                    <label for="estado" class="block text-sm font-medium text-gray-700">Filtrar por Estado</label>
-                                    <select id="estado" name="estado" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                        <option value="" selected>[OPCION_TODOS]</option>
-                                        <option value="active">[OPCION_ACTIVOS]</option>
-                                        <option value="annulled">[OPCION_ANULADOS]</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <fieldset class="mt-4 pt-4 border-t border-gray-200">
-                                <legend class="text-base font-medium text-gray-900 mb-2">Filtro por Conceptos / Categorías</legend>
-                                <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                                    <div class="flex items-center">
-                                        <input id="cat-1" name="categories" type="checkbox" value="Categoria 1" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                                        <label for="cat-1" class="ml-2 block text-sm text-gray-700">Categoría 1</label>
-                                    </div>
-                                    <div class="flex items-center">
-                                        <input id="cat-2" name="categories" type="checkbox" value="Categoria 2" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                                        <label for="cat-2" class="ml-2 block text-sm text-gray-700">Categoría 2</label>
-                                    </div>
-                                    </div>
-                            </fieldset>
-                            
-                            <div class="flex space-x-4 pt-4 border-t border-gray-200">
-                                <button type="submit" name="action" value="filter" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 transition duration-150">
-                                    <i class="fas fa-search mr-2"></i> Aplicar Filtros
+                            <form method="post" enctype="multipart/form-data" action="{% url 'recibos:cargar_excel' %}" id="upload-form" class="space-y-4">
+                                {% csrf_token %}
+                                <label class="block">
+                                    <span class="sr-only">Seleccionar Archivo Excel</span>
+                                    <input type="file" name="excel_file" accept=".xlsx" required
+                                                    class="block w-full text-sm text-gray-500
+                                                        file:mr-4 file:py-2 file:px-4
+                                                        file:rounded-lg file:border-0
+                                                        file:text-sm file:font-semibold
+                                                        file:bg-indigo-50 file:text-indigo-700
+                                                        hover:file:bg-indigo-100 transition duration-150"
+                                    >
+                                </label>
+                                <button type="submit" id="upload-button" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150 disabled:opacity-50" disabled>
+                                    <i class="fas fa-upload mr-2"></i> Cargar Datos
                                 </button>
-                                <button type="submit" name="action" value="excel" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition duration-150">
-                                    <i class="fas fa-file-excel mr-2"></i> Generar Reporte Excel
-                                </button>
-                                <button type="submit" name="action" value="pdf" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
-                                    <i class="fas fa-file-pdf mr-2"></i> Generar Reporte PDF
-                                </button>
+                            </form>
+                            <p id="upload-status" class="mt-2 text-xs text-gray-500 text-center italic">
+                                Ningún archivo seleccionado.
+                            </p>
+                        </div>
+
+                        <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
+                            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-edit mr-2 text-yellow-600"></i> Creación Manual</h2>
+
+                            <a href="{% url 'recibos:crear_recibo' %}" class="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-yellow-600 hover:bg-yellow-700 transition duration-150 flex justify-center items-center">
+                                <i class="fas fa-plus-circle mr-2"></i> Crear Nuevo Recibo
+                            </a>
+                            <p id="generation-status" class="mt-2 text-xs text-gray-500 text-center italic">
+                                Ingreso uno a uno para clientes específicos.
+                            </p>
+                        </div>
+                        
+                        <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100 h-96 flex flex-col">
+                            <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-clipboard-list mr-2 text-blue-600"></i> Procesos y Logs</h2>
+                            <div id="log-display" class="flex-grow overflow-y-auto bg-gray-50 p-3 rounded-lg text-xs font-mono border border-gray-200">
+
+                                {% for message in messages %}
+                                    <p class="mb-1 text-gray-700">
+                                        [{{ message.tags }}] <span class="text-blue-600">INFO:</span> {{ message }}
+                                    </p>
+                                {% endfor %}
+
+                                <p class="mb-1 text-gray-700">
+                                    [08:00:00] <span class="text-green-600">✅</span> Proceso de inicio del Dashboard.
+                                </p>
                             </div>
-                        </form>
-                    </div>
+                        </div>
 
-                    <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-                        <h1 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-table mr-2 text-indigo-600"></i> Resultados y Gestión de Recibos</h1>
+                    </aside>
 
-                        <form method="get" action="[URL_DASHBOARD_BUSQUEDA]" class="flex space-x-2 mb-4">
-                            <input type="hidden" name="filter_key_1" value="filter_value_1">
-                            <input type="hidden" name="filter_key_2" value="filter_value_2">
-                            <input type="text" name="quick_search" placeholder="Buscar por N°, Nombre, Cédula/RIF, Transferencia..." 
-                                     class="flex-grow rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                     value="[VALOR_BUSQUEDA_RAPIDA]">
-                            <button type="submit" class="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150">
-                                <i class="fas fa-search"></i> Buscar
+                    <section class="w-full lg:w-3/4 space-y-6">
+                        
+                        <div class="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+                            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-filter mr-2 text-purple-600"></i> Módulo de Reportes y Filtrado</h2>
+
+                            <form method="get" action="{% url 'recibos:dashboard' %}" class="space-y-4">
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <label for="fecha_inicial" class="block text-sm font-medium text-gray-700">Fecha Inicial</label>
+                                        <input type="date" name="fecha_inicial" id="fecha_inicial" value="{{ request.GET.fecha_inicial|default:'' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label for="fecha_final" class="block text-sm font-medium text-gray-700">Fecha Final</label>
+                                        <input type="date" name="fecha_final" id="fecha_final" value="{{ request.GET.fecha_final|default:'' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="estado" class="block text-sm font-medium text-gray-700">Filtrar por Estado</label>
+                                        <select id="estado" name="estado" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                            <option value="" {% if not request.GET.estado %}selected{% endif %}>Todos</option>
+                                            <option value="activo" {% if request.GET.estado == 'activo' %}selected{% endif %}>Activos</option>
+                                            <option value="anulado" {% if request.GET.estado == 'anulado' %}selected{% endif %}>Anulados</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <fieldset class="mt-4 pt-4 border-t border-gray-200">
+                                    <legend class="text-base font-medium text-gray-900 mb-2">Filtro por Conceptos / Categorías</legend>
+                                
+                                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                                        {# CORRECCIÓN CRÍTICA APLICADA: request.GET.getlist 'categories' #}
+                                        {% for cat in categories %}
+                                            <div class="flex items-center">
+                                                <input id="{{ cat }}" 
+                                                    name="categories" 
+                                                    type="checkbox" 
+                                                    value="{{ cat }}" 
+                                                    
+                                                    {% if cat in request.GET.getlist 'categories' %}checked{% endif %}
+                                                    
+                                                    class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                                                    
+                                                <label for="{{ cat }}" class="ml-2 block text-sm text-gray-700">{{ cat|capfirst }}</label>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+
+                                </fieldset>
+                                
+                                <div class="flex space-x-4 pt-4 border-t border-gray-200">
+                                    <button type="submit" name="action" value="filter" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-600 transition duration-150">
+                                        <i class="fas fa-search mr-2"></i> Aplicar Filtros
+                                    </button>
+                                    {# La acción de generar reportes puede apuntar a una vista específica si lo deseas, pero con el 'name="action"' se maneja bien en la vista principal #}
+                                    <button type="submit" name="action" value="excel" formaction="{% url 'recibos:generar_reporte' %}" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 transition duration-150">
+                                        <i class="fas fa-file-excel mr-2"></i> Generar Reporte Excel
+                                    </button>
+                                    <button type="submit" name="action" value="pdf" formaction="{% url 'recibos:generar_reporte' %}" class="flex-1 inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
+                                        <i class="fas fa-file-pdf mr-2"></i> Generar Reporte PDF
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                            <h1 class="text-xl font-bold text-gray-800 mb-4 flex items-center"><i class="fas fa-table mr-2 text-indigo-600"></i> Resultados y Gestión de Recibos</h1>
+
+
+                            <form method="get" action="{% url 'recibos:dashboard' %}" class="flex space-x-2 mb-4">
+                                {# Mantiene TODOS los filtros existentes al usar la búsqueda rápida #}
+                                {% for key, value in request.GET.items %}
+                                    {% if key != 'quick_search' and key != 'page' %}
+                                        <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                <input type="text" name="quick_search" placeholder="Buscar por N°, Nombre, Cédula/RIF, Transferencia..." 
+                                                class="flex-grow rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                value="{{ request.GET.quick_search|default:'' }}">
+                                <button type="submit" class="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </form>
+
+                            <div class="overflow-x-auto border rounded-lg">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nº Recibo</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cédula/RIF</th>
+                                            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto (Bs.)</th>
+                                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+
+                                        {% for recibo in recibos %}
+                                            <tr class="{% if recibo.anulado %}bg-red-50/50 text-gray-400{% else %}hover:bg-gray-50{% endif %} transition duration-100">
+                                                <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{{ recibo.id }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{{ recibo.numero_recibo }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{{ recibo.nombre }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{{ recibo.rif_cedula_identidad }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm font-bold text-right text-indigo-600">{{ recibo.total_monto_bs|floatformat:2 }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">{{ recibo.fecha|date:"d/m/Y" }}</td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-center">
+                                                    {% if recibo.anulado %}
+                                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Anulado</span>
+                                                    {% else %}
+                                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Activo</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-center">
+
+                                                    <a href="{% url 'recibos:detalle_recibo' pk=recibo.id %}" class="text-indigo-600 hover:text-indigo-900 mr-2" title="Ver Detalle"><i class="fas fa-eye"></i></a>
+                                                    <a href="{% url 'recibos:editar_recibo' pk=recibo.id %}" class="text-yellow-600 hover:text-yellow-900 mr-2" title="Editar"><i class="fas fa-edit"></i></a>
+                                                    
+                                                    <button type="button" 
+                                                            data-action-url="{% url 'recibos:anular_recibo' pk=recibo.id %}" 
+                                                            data-message="{% if recibo.anulado %}El recibo N° **{{ recibo.numero_recibo }}** ya está anulado.{% else %}¿Estás seguro que deseas **ANULAR** el recibo N° **{{ recibo.numero_recibo }}**? Esta acción es irreversible.{% endif %}"
+                                                            data-confirm-text="{% if recibo.anulado %}Recibo Anulado{% else %}Sí, Anular{% endif %}"
+                                                            data-color="{% if recibo.anulado %}gray{% else %}red{% endif %}"
+                                                            class="text-red-600 hover:text-red-900 anular-recibo-button {% if recibo.anulado %}opacity-50 cursor-not-allowed{% endif %}" 
+                                                            title="{% if recibo.anulado %}Recibo Anulado{% else %}Anular Recibo{% endif %}" 
+                                                            {% if recibo.anulado %}disabled{% endif %}>
+                                                        <i class="fas fa-ban"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr class="col-span-8">
+                                                <td colspan="8" class="text-center p-10 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                                                    <i class="fas fa-search-minus text-6xl text-gray-400 mb-4"></i>
+                                                    <p class="text-xl font-medium text-gray-600">No se encontraron recibos que coincidan con los filtros o la búsqueda.</p>
+                                                    <p class="text-gray-500 mt-2">Intenta ajustar tus criterios de búsqueda o filtros.</p>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {# LÓGICA DE PAGINACIÓN CORREGIDA #}
+                            {% if recibos.has_other_pages %}
+                                <div class="mt-4 flex justify-between items-center text-sm text-gray-600">
+                                    <span>Página {{ recibos.number }} de {{ recibos.paginator.num_pages }}</span>
+                                    <div class="flex space-x-2">
+                                        {% if recibos.has_previous %}
+                                            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ recibos.previous_page_number }}" class="px-3 py-1 rounded-lg border hover:bg-gray-100">Anterior</a>
+                                        {% endif %}
+                                        {% if recibos.has_next %}
+                                            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ recibos.next_page_number }}" class="px-3 py-1 rounded-lg border hover:bg-gray-100">Siguiente</a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="flex justify-start mt-6 pt-4 border-t border-gray-200">
+                            <button type="button" 
+                                    data-action-url="{% url 'recibos:limpiar_logs' %}" 
+                                    data-message="¿Estás seguro que deseas **LIMPIAR todos los registros de Logs**? Esta acción no se puede deshacer."
+                                    data-confirm-text="Sí, Limpiar Logs"
+                                    data-color="gray"
+                                    id="clear-logs-button"
+                                    class="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gray-500 hover:bg-gray-600 transition duration-150">
+                                <i class="fas fa-eraser mr-2"></i> Limpiar Logs
                             </button>
-                        </form>
 
-                        <div class="overflow-x-auto border rounded-lg">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nº Recibo</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cédula/RIF</th>
-                                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto (Bs.)</th>
-                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr class="hover:bg-gray-50 transition duration-100">
-                                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">1</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">R-0001</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">Cliente Ejemplo Activo</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">V-12345678</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-bold text-right text-indigo-600">125.50</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">01/01/2025</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-center">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Activo</span>
-                                        </td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-center">
-                                            <a href="[URL_RECEIPT_DETAIL_1]" class="text-indigo-600 hover:text-indigo-900 mr-2" title="Ver Detalle"><i class="fas fa-eye"></i></a>
-                                            <a href="[URL_RECEIPT_UPDATE_1]" class="text-yellow-600 hover:text-yellow-900 mr-2" title="Editar"><i class="fas fa-edit"></i></a>
-                                            <button type="button" 
-                                                    data-action-url="[URL_RECEIPT_ANULAR_1]" 
-                                                    data-message="¿Estás seguro que deseas **ANULAR** el recibo N° **R-0001**? Esta acción es irreversible."
-                                                    data-confirm-text="Sí, Anular"
-                                                    data-color="red"
-                                                    class="text-red-600 hover:text-red-900 anular-recibo-button" 
-                                                    title="Anular Recibo">
-                                                <i class="fas fa-ban"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr class="bg-red-50/50 text-gray-400 transition duration-100">
-                                        <td class="px-3 py-2 whitespace-nowrap text-xs text-gray-500">2</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">R-0002</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">Cliente Ejemplo Anulado</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">J-20000000</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-bold text-right text-indigo-600">50.00</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500">02/01/2025</td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-center">
-                                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Anulado</span>
-                                        </td>
-                                        <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-center">
-                                            <a href="[URL_RECEIPT_DETAIL_2]" class="text-indigo-600 hover:text-indigo-900 mr-2" title="Ver Detalle"><i class="fas fa-eye"></i></a>
-                                            <a href="[URL_RECEIPT_UPDATE_2]" class="text-yellow-600 hover:text-yellow-900 mr-2" title="Editar"><i class="fas fa-edit"></i></a>
-                                            <button type="button" 
-                                                    data-action-url="[URL_RECEIPT_ANULAR_2]" 
-                                                    data-message="¿Estás seguro que deseas **ANULAR** el recibo N° **R-0002**? Esta acción es irreversible."
-                                                    data-confirm-text="Sí, Anular"
-                                                    data-color="red"
-                                                    class="text-red-600 hover:text-red-900 anular-recibo-button opacity-50 cursor-not-allowed" 
-                                                    title="Anular Recibo" 
-                                                    disabled>
-                                                <i class="fas fa-ban"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <form method="post" action="{% url 'recibos:limpiar_logs' %}" id="clear-logs-form" class="hidden">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="clear_logs">
+                            </form>
                         </div>
+                        
+                    </section>
 
-                        <div class="mt-4 flex justify-between items-center text-sm text-gray-600">
-                            <span>Página [NUMERO_PAGINA] de [TOTAL_PAGINAS]</span>
-                            <div class="flex space-x-2">
-                                <a href="[URL_PAGINA_ANTERIOR]" class="px-3 py-1 rounded-lg border hover:bg-gray-100">Anterior</a>
-                                <a href="[URL_PAGINA_SIGUIENTE]" class="px-3 py-1 rounded-lg border hover:bg-gray-100">Siguiente</a>
-                            </div>
-                        </div>
-                        <div class="hidden text-center p-10 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                            <i class="fas fa-search-minus text-6xl text-gray-400 mb-4"></i>
-                            <p class="text-xl font-medium text-gray-600">No se encontraron recibos que coincidan con los filtros o la búsqueda.</p>
-                            <p class="text-gray-500 mt-2">Intenta ajustar tus criterios de búsqueda o filtros.</p>
-                        </div>
-                        </div>
-
-                    <div class="flex justify-start mt-6 pt-4 border-t border-gray-200">
-                        <button type="button" 
-                                data-action-url="[URL_CLEAR_LOGS]" 
-                                data-message="¿Estás seguro que deseas **LIMPIAR todos los registros de Logs**? Esta acción no se puede deshacer."
-                                data-confirm-text="Sí, Limpiar Logs"
-                                data-color="gray"
-                                id="clear-logs-button"
-                                class="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gray-500 hover:bg-gray-600 transition duration-150">
-                            <i class="fas fa-eraser mr-2"></i> Limpiar Logs
-                        </button>
-                        <form method="post" action="[URL_CLEAR_LOGS]" id="clear-logs-form" class="hidden">[CSRF_TOKEN]</form>
-                    </div>
-                    
-                </section>
-
-            </div>
+                </div>
+            {% endblock main_content %}
         </div>
     </main>
 
-    <footer class="bg-gray-800 text-white p-4">
+    <footer class="bg-gray-800 text-white p-4 mt-auto">
         <div class="max-w-7xl mx-auto text-center text-sm">
-            Sistema de Gestión de Recibos &copy; [AÑO_ACTUAL]
+            Sistema de Gestión de Recibos &copy; {% now "Y" %}
         </div>
     </footer>
+
+    {# MODAL DE CONFIRMACIÓN - Código JS y HTML sin cambios #}
     <div id="confirmation-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 z-50 hidden transition-opacity duration-300" style="opacity: 0;">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
@@ -312,8 +328,9 @@
             </div>
         </div>
     </div>
+    
+    {# SCRIPTS JS (Lógica de Modal, Carga de Archivos) - Sin cambios funcionales #}
     <script>
-        // Variables globales para el modal
         let currentFormToSubmit = null;
         const modal = document.getElementById('confirmation-modal');
         const modalContent = document.getElementById('modal-content');
@@ -321,34 +338,37 @@
         const modalMessage = document.getElementById('modal-message');
         const confirmButton = document.getElementById('confirm-action-button');
 
+
+        function getCsrfToken() {
+            const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            return tokenElement ? tokenElement.value : '';
+        }
+
         function showModal(title, messageHtml, confirmText, confirmColor) {
-            // Establecer contenido
             modalTitle.textContent = title;
-            // Reemplazar **texto** con <strong>texto</strong>
+
             const formattedMessage = messageHtml.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
             modalMessage.innerHTML = formattedMessage; 
             confirmButton.textContent = confirmText;
             
-            // Configurar estilos del botón de confirmación
-            // Limpiar clases de color previas y aplicar las nuevas
             confirmButton.className = 'px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition duration-150';
             if (confirmColor === 'red') {
                 confirmButton.classList.add('bg-red-600', 'hover:bg-red-700');
             } else if (confirmColor === 'gray') {
-                confirmButton.classList.add('bg-gray-600', 'hover:bg-gray-700');
+                confirmButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
             } else {
                 confirmButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
             }
 
-            // Mostrar el modal con animación
+            confirmButton.disabled = (confirmColor === 'gray');
+
             modal.classList.remove('hidden');
             setTimeout(() => {
                 modal.style.opacity = '1';
                 modalContent.classList.remove('scale-95', 'opacity-0');
                 modalContent.classList.add('scale-100', 'opacity-100');
-            }, 10); // Pequeño retraso para que CSS capte el 'display: block'
+            }, 10); 
 
-            // Manejar el clic fuera del modal para cerrarlo
             modal.onclick = function(event) {
                 if (event.target === modal) {
                     hideModal();
@@ -362,18 +382,19 @@
             modal.style.opacity = '0';
             setTimeout(() => {
                 modal.classList.add('hidden');
-                currentFormToSubmit = null; // Limpiar la referencia del formulario
+
+                if (currentFormToSubmit && currentFormToSubmit.id.startsWith('temp-anular-form-')) {
+                    currentFormToSubmit.remove(); 
+                }
+                currentFormToSubmit = null; 
             }, 300);
         }
         
-        // Función para manejar el clic en el botón de confirmación del modal
         confirmButton.addEventListener('click', function() {
-            if (currentFormToSubmit) {
-                console.log(`[ACCIÓN CONFIRMADA] Formulario a enviar: ${currentFormToSubmit.id || 'temporal'}`);
+            if (currentFormToSubmit && !this.disabled) {
+                console.log(`[ACCIÓN CONFIRMADA] Enviando formulario: ${currentFormToSubmit.id || 'temporal'}`);
                 currentFormToSubmit.submit();
-                // Nota: El formulario temporal (para anular) debe ser limpiado por el backend
             }
-            hideModal();
         });
 
 
@@ -381,8 +402,8 @@
             const fileInput = document.querySelector('input[type="file"]');
             const statusElement = document.getElementById('upload-status');
             const uploadButton = document.getElementById('upload-button');
+            const csrfToken = getCsrfToken(); 
 
-            // 1. Script para habilitar el botón de carga de archivos
             if (fileInput) {
                 fileInput.addEventListener('change', function(e) {
                     if (e.target.files.length > 0) {
@@ -402,68 +423,61 @@
                     }
                 });
             }
-            
-            // 2. Manejo de la anulación de recibos usando el modal
+        
             document.querySelectorAll('.anular-recibo-button').forEach(button => {
                 button.addEventListener('click', function() {
+                    if (this.disabled) return; 
+                    
                     const actionUrl = this.dataset.actionUrl;
                     const message = this.dataset.message;
                     const confirmText = this.dataset.confirmText;
                     const color = this.dataset.color;
                     
-                    // Usamos un formulario temporal
                     const tempForm = document.createElement('form');
                     tempForm.method = 'POST';
                     tempForm.action = actionUrl;
-                    tempForm.id = 'temp-anular-form-' + Math.random().toString(36).substring(2, 9); // ID temporal
+                    tempForm.id = 'temp-anular-form-' + Math.random().toString(36).substring(2, 9); 
 
-                    // Asumimos que el token CSRF estará disponible globalmente en una variable JS 
-                    // o se obtendrá de un campo oculto, pero por ahora lo dejamos como comentario.
-                    // const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value; 
-                    // if (csrfToken) {
-                    //     const csrfInput = document.createElement('input');
-                    //     csrfInput.type = 'hidden';
-                    //     csrfInput.name = 'csrfmiddlewaretoken';
-                    //     csrfInput.value = csrfToken;
-                    //     tempForm.appendChild(csrfInput);
-                    // }
-
-                    // Clonar el botón para obtener los datos
+                    if (csrfToken) {
+                        const csrfInput = document.createElement('input');
+                        csrfInput.type = 'hidden';
+                        csrfInput.name = 'csrfmiddlewaretoken';
+                        csrfInput.value = csrfToken;
+                        tempForm.appendChild(csrfInput);
+                    } else {
+                        console.error("CSRF Token no encontrado. La solicitud POST fallará.");
+                    }
                     const actionInput = document.createElement('input');
                     actionInput.type = 'hidden';
                     actionInput.name = 'action';
-                    actionInput.value = 'anular'; // Asumimos que la vista esperará una acción
+                    actionInput.value = 'anular'; 
                     tempForm.appendChild(actionInput);
 
-                    // Añadir el formulario al DOM (oculto)
                     document.body.appendChild(tempForm);
                     
-                    // Asignar el formulario a la variable global
                     currentFormToSubmit = tempForm;
                     
-                    // Mostrar el modal
                     showModal('Confirmación de Anulación', message, confirmText, color);
                 });
             });
-
-            // 3. Manejo del botón de Limpiar Logs
-            document.getElementById('clear-logs-button').addEventListener('click', function() {
-                const actionUrl = this.dataset.actionUrl;
-                const message = this.dataset.message;
-                const confirmText = this.dataset.confirmText;
-                const color = this.dataset.color;
-                
-                // Usar el formulario oculto existente
-                const clearLogsForm = document.getElementById('clear-logs-form');
-                if (clearLogsForm) {
-                    currentFormToSubmit = clearLogsForm;
-                    showModal('Confirmación de Limpieza', message, confirmText, color);
-                }
-            });
+            const clearLogsButton = document.getElementById('clear-logs-button');
+            if (clearLogsButton) {
+                clearLogsButton.addEventListener('click', function() {
+                    const message = this.dataset.message;
+                    const confirmText = this.dataset.confirmText;
+                    const color = this.dataset.color;
+                    
+                    const clearLogsForm = document.getElementById('clear-logs-form');
+                    if (clearLogsForm) {
+                        currentFormToSubmit = clearLogsForm;
+                        showModal('Confirmación de Limpieza', message, confirmText, color);
+                    }
+                });
+            }
         });
     </script>
     <div class="hidden">
-        [CSRF_TOKEN_GLOBAL]
+        {% csrf_token %}
     </div>
 
 </body>
