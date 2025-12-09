@@ -71,11 +71,11 @@
             <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
               <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center"><i class="fas fa-file-upload mr-2 text-indigo-600"></i> Carga de Archivos</h2>
 
-              <form method="post" enctype="multipart/form-data" action="{% url 'recibos:upload_excel' %}" id="upload-form" class="space-y-4">
+              <form method="post" enctype="multipart/form-data" action="{% url 'recibos:dashboard' %}" id="upload-form" class="space-y-4">
                 {% csrf_token %}
                 <label class="block">
                   <span class="sr-only">Seleccionar Archivo Excel</span>
-                  <input type="file" name="excel_file" id="excel-file-input" accept=".xlsx" required
+                  <input type="file" name="archivo_recibo" id="excel-file-input" accept=".xlsx" required
                           class="block w-full text-sm text-gray-500
                               file:mr-4 file:py-2 file:px-4
                               file:rounded-lg file:border-0

@@ -41,3 +41,4 @@ class Recibo(models.Model):
         db_table = 'recibos_pago'
         # Puedes añadir un índice para optimizar la búsqueda del último recibo
         # indexes = [models.Index(fields=['-numero_recibo'])]
+        

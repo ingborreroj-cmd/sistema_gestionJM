@@ -1,18 +1,14 @@
-# apps/recibos/urls.py
-
 from django.urls import path
 from . import views
-
-# 🛑 ELIMINA O COMENTA ESTA LÍNEA INCORRECTA 🛑
-# from .views import home_view # Vista que renderiza base.html 
 
 app_name = 'recibos'
 
 urlpatterns = [
-    # 1. RUTA PRINCIPAL DE LA APP RECIBOS
-    path('', views.dashboard, name='dashboard'), 
+    # 1. RUTA PRINCIPAL (Única)
+    # 🛑 CORRECCIÓN: Usamos la función que SÍ existe y que unifica toda la lógica.
+    # El 'name' de la URL debe ser 'dashboard' porque es la referencia que usaste en tu HTML.
+    path('', views.crear_recibo_desde_excel, name='dashboard'), 
     
-    # 2. RUTA DE PROCESAMIENTO
-    path('upload/', views.excel_upload_view, name='upload_excel'),
-    
+    # 🛑 NOTA: Eliminamos las rutas duplicadas e innecesarias (dashboard, upload, crear-recibo)
+    # Si realmente necesitas otras rutas, confírmalo, pero para tu objetivo principal, esta es la única necesaria.
 ]

@@ -50,7 +50,7 @@ def importar_recibos_desde_excel(archivo_excel):
     RIF_COL = 'rif_cedula_identidad'
 
     try:
-        # 1. Nombres Canónicos (la lista fija de 22 elementos)
+        # 1. Nombres Canónicos (21 columnas de datos)
         COLUMNAS_CANONICAS = [
             'estado', 'nombre', RIF_COL, 'direccion_inmueble', 'ente_liquidado',
             'categoria1', 'categoria2', 'categoria3', 'categoria4', 'categoria5',
@@ -59,31 +59,33 @@ def importar_recibos_desde_excel(archivo_excel):
             'numero_transferencia', 'conciliado', 'fecha', 'concepto' 
         ]
         
-        # 2. LECTURA SIMPLE y robusta (Ignorando encabezado)
-        df_temp = pd.read_excel(
+        # 2. LECTURA de Excel
+        df = pd.read_excel(
             archivo_excel, 
             sheet_name='Hoja2', 
-            header=None,         
-            nrows=2 # Leer solo la Fila 1 (encabezado) y la Fila 2 (datos)
+            header=3, # La fila con el índice 3 (Fila 4) es el encabezado
+            nrows=1   # Lee SOLO UNA fila de datos (Fila 5)
         )
         
-        # 3. Extracción de la Fila 2 (el índice 1)
-        if len(df_temp) < 2:
-            return False, "Error: El archivo Excel debe contener al menos dos filas (Encabezado y Datos)."
+        # ... (Validación de df.empty, fila_datos y columnas) ...
+        if df.empty:
+             # 🛑 RETURN DE FALLO
+             return False, "Error: El archivo Excel está vacío o la hoja 'Hoja2' no contiene datos en el rango esperado (Fila 5).", None
 
-        fila_datos = df_temp.iloc[1] 
+        fila_datos = df.iloc[0] 
         
-        # 4. Verificación de 22 columnas
         if len(fila_datos) != len(COLUMNAS_CANONICAS):
-             return False, f"Error: La Fila 2 tiene {len(fila_datos)} columnas, pero se esperaban {len(COLUMNAS_CANONICAS)}. El archivo Excel está reportando datos hasta la Columna K (11 columnas). Realice la limpieza rigurosa del Excel."
+            # 🛑 RETURN DE FALLO
+            return False, f"Error: Se encontraron {len(fila_datos)} valores, pero se esperaban {len(COLUMNAS_CANONICAS)}. El Excel tiene columnas vacías.", None
              
         fila_mapeada = dict(zip(COLUMNAS_CANONICAS, fila_datos.tolist()))
         
-        # --- FILTRO Y VALIDACIÓN DEL RIF ---
+        # --- VALIDACIÓN DEL RIF ---
         rif_cedula_raw = str(fila_mapeada.get(RIF_COL, '')).strip()
         
         if not rif_cedula_raw:
-            return False, "El registro de la Fila 2 no tiene RIF/Cédula y no se puede procesar."
+             # 🛑 RETURN DE FALLO
+             return False, "El registro no tiene RIF/Cédula y no se puede procesar.", None
             
         logger.info(f"ÉXITO EN LECTURA: Se encontró el registro con RIF: {rif_cedula_raw}")
         
@@ -95,37 +97,28 @@ def importar_recibos_desde_excel(archivo_excel):
             ultimo_recibo = Recibo.objects.aggregate(Max('numero_recibo'))['numero_recibo__max']
             data_a_insertar['numero_recibo'] = (ultimo_recibo or 0) + 1
             
-            # Mapeo y Normalización de Texto
+            # ... (Mapeo y normalización de todos los campos) ...
             data_a_insertar['estado'] = str(fila_mapeada.get('estado', '')).strip().upper() 
             data_a_insertar['nombre'] = str(fila_mapeada.get('nombre', '')).strip().title()
             data_a_insertar['rif_cedula_identidad'] = str(rif_cedula_raw).strip().replace('.', '').replace('-', '').replace(' ', '').upper()
-            
             data_a_insertar['direccion_inmueble'] = str(fila_mapeada.get('direccion_inmueble', 'DIRECCION NO ESPECIFICADA')).strip().title()
             data_a_insertar['ente_liquidado'] = str(fila_mapeada.get('ente_liquidado', 'ENTE NO ESPECIFICADO')).strip().title()
             data_a_insertar['numero_transferencia'] = str(fila_mapeada.get('numero_transferencia', '')).strip().upper()
             data_a_insertar['concepto'] = str(fila_mapeada.get('concepto', '')).strip().title()
             
-            # 🛑 CATEGORÍAS MAPEADAS COMO BOOLEANO (Segun la instruccion 'X' = True)
-            data_a_insertar['categoria1'] = to_boolean(fila_mapeada.get('categoria1'))
-            data_a_insertar['categoria2'] = to_boolean(fila_mapeada.get('categoria2'))
-            data_a_insertar['categoria3'] = to_boolean(fila_mapeada.get('categoria3'))
-            data_a_insertar['categoria4'] = to_boolean(fila_mapeada.get('categoria4'))
-            data_a_insertar['categoria5'] = to_boolean(fila_mapeada.get('categoria5'))
-            data_a_insertar['categoria6'] = to_boolean(fila_mapeada.get('categoria6'))
-            data_a_insertar['categoria7'] = to_boolean(fila_mapeada.get('categoria7'))
-            data_a_insertar['categoria8'] = to_boolean(fila_mapeada.get('categoria8'))
-            data_a_insertar['categoria9'] = to_boolean(fila_mapeada.get('categoria9'))
-            data_a_insertar['categoria10'] = to_boolean(fila_mapeada.get('categoria10'))
-            
-            # Conciliado (Booleano)
+            # Categorías
+            for i in range(1, 11):
+                 key = f'categoria{i}'
+                 data_a_insertar[key] = to_boolean(fila_mapeada.get(key))
+
             data_a_insertar['conciliado'] = to_boolean(fila_mapeada.get('conciliado'))
 
-            # Conversión a Decimal
+            # Decimales
             data_a_insertar['gastos_administrativos'] = limpiar_y_convertir_decimal(fila_mapeada.get('gastos_administrativos', 0))
             data_a_insertar['tasa_dia'] = limpiar_y_convertir_decimal(fila_mapeada.get('tasa_dia', 0))
             data_a_insertar['total_monto_bs'] = limpiar_y_convertir_decimal(fila_mapeada.get('total_monto_bs', 0))
-
-            # Conversión a Fecha
+            
+            # Validación y Conversión de Fecha
             fecha_excel = fila_mapeada.get('fecha')
             
             if pd.isna(fecha_excel) or str(fecha_excel).strip() == "":
@@ -144,14 +137,17 @@ def importar_recibos_desde_excel(archivo_excel):
                 
             except Exception as e:
                 logger.error(f"Error al convertir fecha '{fecha_excel}': {e}")
-                raise ValueError(f"Formato de fecha no reconocido para el valor: {fecha_excel}. Use formatos estándar como DD/MM/AAAA o AAAA-MM-DD.")
+                # Lanzamos la excepción para que el bloque 'try...except' principal la capture
+                raise ValueError(f"Formato de fecha no reconocido para el valor: {fecha_excel}. Use formatos estándar.")
 
 
             # Creación del Recibo
             recibo_creado = Recibo.objects.create(**data_a_insertar)
             
-            return True, f"Se generó el recibo N° {recibo_creado.numero_recibo} para {data_a_insertar['nombre']} exitosamente. Listo para PDF."
+            # 🛑 RETURN DE ÉXITO (Ahora devolvemos el PK)
+            return True, f"Se generó el recibo N° {recibo_creado.numero_recibo} para {data_a_insertar['nombre']} exitosamente. Listo para PDF.", recibo_creado.pk
 
     except Exception as e:
         logger.error(f"FALLO DE VALIDACIÓN en el registro: {e}")
-        return False, f"Fallo en la carga: Error de validación de datos (revisar consola): {str(e)}"
+        # 🛑 RETURN DE FALLO (Ahora devolvemos None)
+        return False, f"Fallo en la carga: Error de validación de datos (revisar consola): {str(e)}", None
