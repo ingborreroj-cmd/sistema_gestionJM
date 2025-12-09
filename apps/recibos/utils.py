@@ -1,125 +1,157 @@
 import pandas as pd
 from django.db import transaction
 from django.db.models import Max
-from decimal import Decimal
-from datetime import date # Necesario para la conversión de fecha
+from decimal import Decimal, InvalidOperation
+from datetime import date 
+import logging
+import re
 from .models import Recibo 
 
+logger = logging.getLogger(__name__)
+
+# --- FUNCIONES DE UTILIDAD ---
+
 def to_boolean(value):
-    """Convierte valores de Excel (NaN, SI, X, 1, etc.) a Booleano."""
+    """Convierte valores comunes de Excel (NaN, SI, X, 1, etc.) a Booleano."""
     if pd.isna(value):
         return False
-    return str(value).strip().lower() in ['sí', 'si', 'true', '1', 'x', 'x', 'y']
+    # La X es la marca principal, debe estar aquí.
+    return str(value).strip().lower() in ['sí', 'si', 'true', '1', 'x', 'y'] 
 
-def importar_recibos_desde_excel(archivo_excel):
-    # Variables de estado
-    registros_a_crear = []
-    total_errores = 0
+def limpiar_y_convertir_decimal(value):
+    """Limpia cualquier carácter no numérico y convierte a Decimal."""
+    if pd.isna(value) or value is None:
+        return Decimal(0)
+    
+    s = str(value).strip()
+    if not s or s in ['-', 'n/a', 'no aplica']:
+        return Decimal(0)
+
+    s_limpio = re.sub(r'[^\d,\.]', '', s) 
+    s_final = s_limpio.replace(',', '.')
+    
+    if s_final.count('.') > 1:
+        partes = s_final.rsplit('.', 1) 
+        s_final = partes[0].replace('.', '') + '.' + partes[1] 
     
     try:
-        # 1. Leer el archivo Excel (header=3 ya corregido)
-        df = pd.read_excel(archivo_excel, header=3)
+        if not s_final:
+            return Decimal(0)
         
-        # Iniciar transacción para asegurar la integridad
+        return Decimal(s_final)
+    except InvalidOperation:
+        logger.error(f"Error fatal de conversión de Decimal: '{s_final}' (original: '{value}')")
+        return Decimal(0)
+
+# --- FUNCIÓN PRINCIPAL DE IMPORTACIÓN ---
+
+def importar_recibos_desde_excel(archivo_excel):
+    
+    RIF_COL = 'rif_cedula_identidad'
+
+    try:
+        # 1. Nombres Canónicos (la lista fija de 22 elementos)
+        COLUMNAS_CANONICAS = [
+            'estado', 'nombre', RIF_COL, 'direccion_inmueble', 'ente_liquidado',
+            'categoria1', 'categoria2', 'categoria3', 'categoria4', 'categoria5',
+            'categoria6', 'categoria7', 'categoria8', 'categoria9', 'categoria10',
+            'gastos_administrativos', 'tasa_dia', 'total_monto_bs', 
+            'numero_transferencia', 'conciliado', 'fecha', 'concepto' 
+        ]
+        
+        # 2. LECTURA SIMPLE y robusta (Ignorando encabezado)
+        df_temp = pd.read_excel(
+            archivo_excel, 
+            sheet_name='Hoja2', 
+            header=None,         
+            nrows=2 # Leer solo la Fila 1 (encabezado) y la Fila 2 (datos)
+        )
+        
+        # 3. Extracción de la Fila 2 (el índice 1)
+        if len(df_temp) < 2:
+            return False, "Error: El archivo Excel debe contener al menos dos filas (Encabezado y Datos)."
+
+        fila_datos = df_temp.iloc[1] 
+        
+        # 4. Verificación de 22 columnas
+        if len(fila_datos) != len(COLUMNAS_CANONICAS):
+             return False, f"Error: La Fila 2 tiene {len(fila_datos)} columnas, pero se esperaban {len(COLUMNAS_CANONICAS)}. El archivo Excel está reportando datos hasta la Columna K (11 columnas). Realice la limpieza rigurosa del Excel."
+             
+        fila_mapeada = dict(zip(COLUMNAS_CANONICAS, fila_datos.tolist()))
+        
+        # --- FILTRO Y VALIDACIÓN DEL RIF ---
+        rif_cedula_raw = str(fila_mapeada.get(RIF_COL, '')).strip()
+        
+        if not rif_cedula_raw:
+            return False, "El registro de la Fila 2 no tiene RIF/Cédula y no se puede procesar."
+            
+        logger.info(f"ÉXITO EN LECTURA: Se encontró el registro con RIF: {rif_cedula_raw}")
+        
+        data_a_insertar = {}
+        
+        # --- B. TRANSACCIÓN Y MAPEO DE DATOS ---
         with transaction.atomic():
-            
-            # Obtener el último numero_recibo para continuar la secuencia
+            # Obtener y asignar nuevo número de recibo
             ultimo_recibo = Recibo.objects.aggregate(Max('numero_recibo'))['numero_recibo__max']
-            next_numero_recibo = (ultimo_recibo or 0) + 1
+            data_a_insertar['numero_recibo'] = (ultimo_recibo or 0) + 1
             
-            # 2. Iterar sobre las filas del DataFrame (Excel)
-            for index, fila in df.iterrows():
-                
-                # Bucle de manejo de errores por fila (para evitar el fallo "0 recibos")
-                try:
-                    
-                    # ----------------------------------------------------
-                    # A. PRE-VALIDACIÓN (Descarta Filas Completamente Vacías)
-                    # ----------------------------------------------------
-                    # Asume que el RIF/Cédula es un campo esencial
-                    rif_cedula_raw = fila.get('RIF O CÉDULA DE IDENTIDAD')
-                    if pd.isna(rif_cedula_raw) or str(rif_cedula_raw).strip() == "":
-                        # Si no hay identificador, saltamos la fila (puede ser una fila de metadatos o vacía)
-                        continue 
-                    
-                    data_a_insertar = {}
-                    data_a_insertar['numero_recibo'] = next_numero_recibo
-                    
-                    # ----------------------------------------------------
-                    # B. NORMALIZACIÓN Y CONVERSIÓN DE TIPOS
-                    # ----------------------------------------------------
-                    
-                    # Normalización de Texto (Trujillo vs trujillo)
-                    data_a_insertar['estado'] = str(fila.get('ESTADO', '')).strip().upper() # TODO A MAYÚSCULAS
-                    data_a_insertar['nombre'] = str(fila.get('NOMBRE', '')).strip().title() # CAPITALIZACIÓN (Nombres Propios)
-                    data_a_insertar['ente_liquidado'] = str(fila.get('ENTE LIQUIDADO', '')).strip().title()
-                    
-                    # Limpieza de RIF/Cédula
-                    data_a_insertar['rif_cedula_identidad'] = str(rif_cedula_raw).strip().replace('.', '').replace('-', '').replace(' ', '')
-                    
-                    data_a_insertar['direccion_inmueble'] = str(fila.get('DIRECCION DEL INMUEBLE', '')).strip()
-                    data_a_insertar['numero_transferencia'] = str(fila.get('NUMERO DE TRANSFERENCIA', '')).strip()
-                    data_a_insertar['concepto'] = str(fila.get('CONCEPTO', '')).strip()
-                    
-                    # Categorías (Usa la función to_boolean)
-                    data_a_insertar['categoria1'] = to_boolean(fila.get('1.- TITULO DE TIERRA URBANA- TITULO DE ADJUDICACION EN PROPIEDAD'))
-                    data_a_insertar['categoria2'] = to_boolean(fila.get('2.- TITULO DE TIERRA URBANA-TITULO DE ADJUDICACION MAS VIVIENDA'))
-                    data_a_insertar['categoria3'] = to_boolean(fila.get('Municipal'))
-                    data_a_insertar['categoria4'] = to_boolean(fila.get('Tierra Privada'))
-                    data_a_insertar['categoria5'] = to_boolean(fila.get('Tierra INAVI o de cualquier Ente transferido al INTU'))
-                    data_a_insertar['categoria6'] = to_boolean(fila.get('4.1- Con título de Tierra Urbana, hasta 400 mt2 una milésima por mt2'))
-                    data_a_insertar['categoria7'] = to_boolean(fila.get('4.2-Con Título INAVI(Gastos Administrativos):'))
-                    data_a_insertar['categoria8'] = to_boolean(fila.get('5.- ESTUDIOS TECNICOS:'))
-                    data_a_insertar['categoria9'] = to_boolean(fila.get('6.-ARRENDAMIENTOS DE LOCALES COMERCIALES:'))
-                    data_a_insertar['categoria10'] = to_boolean(fila.get('7.- ARRENDAMIENTOS DE TERRENOS'))
-                    data_a_insertar['conciliado'] = to_boolean(fila.get('CONCILIADO'))
-
-                    # Conversión a Decimal (CRÍTICO para evitar errores de tipo)
-                    # El uso de .replace(',', '.') asegura que acepte el formato español
-                    data_a_insertar['gastos_administrativos'] = Decimal(str(fila.get('GASTOS ADMINISTRATIVOS (UNIDADES ANCLADAS A LA MONEDA DE MAYOR VALOR DEL BCV)', 0)).replace(',', '.').strip() or 0)
-                    data_a_insertar['tasa_dia'] = Decimal(str(fila.get('TASA DEL DIA', 0)).replace(',', '.').strip() or 0)
-                    data_a_insertar['total_monto_bs'] = Decimal(str(fila.get('TOTAL MONTO EN BS', 0)).replace(',', '.').strip() or 0)
-
-                    # Conversión a Fecha (CRÍTICO)
-                    fecha_excel = fila.get('FECHA')
-                    if pd.isna(fecha_excel):
-                        # Levanta un error si la fecha es obligatoria y está vacía
-                        raise ValueError("El campo 'FECHA' es obligatorio.") 
-                    
-                    # Convierte el objeto de fecha de Pandas a objeto date de Python
-                    data_a_insertar['fecha'] = pd.to_datetime(fecha_excel).date()
-
-                    # Campos automáticos que necesitan ser seteados si no son auto_now_add
-                    # data_a_insertar['anulado'] = False 
-                    
-                    # Crear el objeto Recibo (en memoria)
-                    registros_a_crear.append(Recibo(**data_a_insertar))
-                    next_numero_recibo += 1
-                
-                except KeyError as e:
-                    # Este error ocurre si un encabezado falta, lo manejamos al final del try-except principal
-                    raise KeyError(e) 
-                
-                except Exception as e:
-                    # 📢 Este print te dirá qué está fallando exactamente en cada fila
-                    print(f"ERROR DE VALIDACIÓN en fila {index + 5} (RIF: {rif_cedula_raw}): {e}")
-                    total_errores += 1
-                    # La fila es ignorada, y el bucle continúa
-
-            # 4. Inserción Masiva
-            if registros_a_crear:
-                Recibo.objects.bulk_create(registros_a_crear)
+            # Mapeo y Normalización de Texto
+            data_a_insertar['estado'] = str(fila_mapeada.get('estado', '')).strip().upper() 
+            data_a_insertar['nombre'] = str(fila_mapeada.get('nombre', '')).strip().title()
+            data_a_insertar['rif_cedula_identidad'] = str(rif_cedula_raw).strip().replace('.', '').replace('-', '').replace(' ', '').upper()
             
-            # 5. Retorno de Resultado
-            mensaje_final = f"Se importaron {len(registros_a_crear)} recibos exitosamente."
-            if total_errores > 0:
-                mensaje_final += f" {total_errores} fila(s) fueron descartadas por errores de datos (revisar la consola del servidor)."
-                
-            return True, mensaje_final
+            data_a_insertar['direccion_inmueble'] = str(fila_mapeada.get('direccion_inmueble', 'DIRECCION NO ESPECIFICADA')).strip().title()
+            data_a_insertar['ente_liquidado'] = str(fila_mapeada.get('ente_liquidado', 'ENTE NO ESPECIFICADO')).strip().title()
+            data_a_insertar['numero_transferencia'] = str(fila_mapeada.get('numero_transferencia', '')).strip().upper()
+            data_a_insertar['concepto'] = str(fila_mapeada.get('concepto', '')).strip().title()
+            
+            # 🛑 CATEGORÍAS MAPEADAS COMO BOOLEANO (Segun la instruccion 'X' = True)
+            data_a_insertar['categoria1'] = to_boolean(fila_mapeada.get('categoria1'))
+            data_a_insertar['categoria2'] = to_boolean(fila_mapeada.get('categoria2'))
+            data_a_insertar['categoria3'] = to_boolean(fila_mapeada.get('categoria3'))
+            data_a_insertar['categoria4'] = to_boolean(fila_mapeada.get('categoria4'))
+            data_a_insertar['categoria5'] = to_boolean(fila_mapeada.get('categoria5'))
+            data_a_insertar['categoria6'] = to_boolean(fila_mapeada.get('categoria6'))
+            data_a_insertar['categoria7'] = to_boolean(fila_mapeada.get('categoria7'))
+            data_a_insertar['categoria8'] = to_boolean(fila_mapeada.get('categoria8'))
+            data_a_insertar['categoria9'] = to_boolean(fila_mapeada.get('categoria9'))
+            data_a_insertar['categoria10'] = to_boolean(fila_mapeada.get('categoria10'))
+            
+            # Conciliado (Booleano)
+            data_a_insertar['conciliado'] = to_boolean(fila_mapeada.get('conciliado'))
 
-    except KeyError as e:
-        # Error al leer las columnas (falta un encabezado)
-        return False, f"Error en la columna: La columna {e} no se encuentra en el archivo Excel. Revise la cabecera."
+            # Conversión a Decimal
+            data_a_insertar['gastos_administrativos'] = limpiar_y_convertir_decimal(fila_mapeada.get('gastos_administrativos', 0))
+            data_a_insertar['tasa_dia'] = limpiar_y_convertir_decimal(fila_mapeada.get('tasa_dia', 0))
+            data_a_insertar['total_monto_bs'] = limpiar_y_convertir_decimal(fila_mapeada.get('total_monto_bs', 0))
+
+            # Conversión a Fecha
+            fecha_excel = fila_mapeada.get('fecha')
+            
+            if pd.isna(fecha_excel) or str(fecha_excel).strip() == "":
+                raise ValueError("El campo 'FECHA' es obligatorio y está vacío.") 
+            
+            if isinstance(fecha_excel, str) and fecha_excel.strip().upper() == 'FECHA':
+                raise ValueError("El campo 'FECHA' contiene la palabra 'FECHA'. Por favor, ingrese una fecha válida.")
+
+            try:
+                fecha_objeto = pd.to_datetime(fecha_excel, errors='raise')
+
+                if pd.isna(fecha_objeto):
+                    raise ValueError("Formato de fecha inválido.")
+                
+                data_a_insertar['fecha'] = fecha_objeto.date()
+                
+            except Exception as e:
+                logger.error(f"Error al convertir fecha '{fecha_excel}': {e}")
+                raise ValueError(f"Formato de fecha no reconocido para el valor: {fecha_excel}. Use formatos estándar como DD/MM/AAAA o AAAA-MM-DD.")
+
+
+            # Creación del Recibo
+            recibo_creado = Recibo.objects.create(**data_a_insertar)
+            
+            return True, f"Se generó el recibo N° {recibo_creado.numero_recibo} para {data_a_insertar['nombre']} exitosamente. Listo para PDF."
+
     except Exception as e:
-        # Error general (archivo dañado, etc.)
-        return False, f"Ocurrió un error inesperado durante la lectura del archivo: {str(e)}"
+        logger.error(f"FALLO DE VALIDACIÓN en el registro: {e}")
+        return False, f"Fallo en la carga: Error de validación de datos (revisar consola): {str(e)}"
