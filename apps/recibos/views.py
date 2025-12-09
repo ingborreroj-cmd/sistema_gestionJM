@@ -68,7 +68,7 @@ def generate_receipt_pdf(recibo_obj):
     num_transf = recibo_obj.numero_transferencia if recibo_obj.numero_transferencia else ''
     fecha = recibo_obj.fecha.strftime("%d/%m/%Y")
     concepto = recibo_obj.concepto
-    estado = 'ANULADO' if recibo_obj.anulado else 'ACTIVO'
+    estado = recibo_obj.estado
     num_recibo = str(recibo_obj.numero_recibo)
     
     categorias = {
@@ -116,23 +116,26 @@ def generate_receipt_pdf(recibo_obj):
     draw_text_line(c, estado, X1_DATA, current_y + 15, is_bold=False)
     draw_text_line(c, "Nº Recibo:", X2_TITLE, current_y + 15, is_bold=True)
     draw_text_line(c, num_recibo, X2_DATA, current_y + 15, is_bold=False)
-
+    current_y -= 5
+    
     current_y = draw_text_line(c, "Recibí de:", X1_TITLE, current_y, is_bold=True)
     draw_text_line(c, nombre, X1_DATA, current_y + 15, is_bold=False)
     draw_text_line(c, "Monto Recibido (Bs.):", X2_TITLE, current_y + 15, is_bold=True)
     draw_text_line(c, monto_formateado, X2_DATA, current_y + 15, is_bold=False)
-
+    current_y -= 5
+    
     current_y = draw_text_line(c, "Rif/C.I:", X1_TITLE, current_y, is_bold=True)
     draw_text_line(c, cedula, X1_DATA, current_y + 15, is_bold=False)
     current_y = draw_text_line(c, "Nº Transferencia:", X2_TITLE, current_y + 15, is_bold=True)
     draw_text_line(c, num_transf, X2_DATA, current_y + 15, is_bold=False)
-
+    current_y -= 5
+    
     current_y = draw_text_line(c, "Dirección:", X1_TITLE, current_y, is_bold=True)
     draw_text_line(c, direccion, X1_DATA, current_y + 15, is_bold=False)
     draw_text_line(c, "Fecha:", X2_TITLE, current_y + 15, is_bold=True)
     draw_text_line(c, fecha, X2_DATA, current_y + 15, is_bold=False)
-    
-    current_y -= 10 
+    current_y -= 5
+     
     current_y = draw_text_line(c, "Concepto:", X1_TITLE, current_y, is_bold=True)
     draw_text_line(c, concepto, X1_DATA, current_y + 15, is_bold=False)
     current_y -= 15
@@ -209,6 +212,8 @@ def generate_receipt_pdf(recibo_obj):
             current_y = draw_text_line(c, "Número de unidades establecidas en el contrato, ancladas a la moneda de mayor valor estipulada por el BCV", X1_TITLE, current_y, font_size=8, is_bold=False)
             current_y -= 5
             
+    # En generate_receipt_pdf (Sustituye tu bloque actual por este):
+
     current_y -= 70
     
     if current_y < 150:
@@ -219,26 +224,46 @@ def generate_receipt_pdf(recibo_obj):
     left_line_x = (width / 2 - line_width - 20)
     right_line_x = (width / 2 + 20)
     
+    # DIBUJAMOS LAS LÍNEAS DE FIRMA
+    # La línea se dibuja en la posición Y = current_y
     c.line(left_line_x, current_y, left_line_x + line_width, current_y)
     c.line(right_line_x, current_y, right_line_x + line_width, current_y)
-    current_y -= 12 
-
-    y_sig = current_y + 12
-    draw_centered_text_right(c, y_sig, "Firma", left_line_x, line_width) 
-    y_sig -= 13
-    draw_centered_text_right(c, y_sig, nombre, left_line_x, line_width, is_bold=True)
-    y_sig -= 12
-    draw_centered_text_right(c, y_sig, f"C.I./RIF: {cedula}", left_line_x, line_width, font_size=9)
-    current_y = y_sig - 10 
-
-    firma_y_instituto = current_y + 35 
-    draw_centered_text_right(c, firma_y_instituto + 18, "Recibido por:", right_line_x, line_width)
-    draw_centered_text_right(c, firma_y_instituto + 3, "PRESLEY ORTEGA", right_line_x, line_width, is_bold=True)
-    draw_centered_text_right(c, firma_y_instituto - 10, "GERENTE DE ADMINISTRACIÓN Y SERVICIOS", right_line_x, line_width)
-    draw_centered_text_right(c, firma_y_instituto - 25, "Designado según gaceta oficial n° 43.062 de fecha", right_line_x, line_width, font_size=8)
-    draw_centered_text_right(c, firma_y_instituto - 35, "16 de febrero de 2025 y Providencia de", right_line_x, line_width, font_size=8)
-    draw_centered_text_right(c, firma_y_instituto - 45, "n° 016-2024 de fecha 16 de diciembre de 2024", right_line_x, line_width, font_size=8)
     
+    # -----------------------------------------------------
+    # Bloque 1: FIRMA DEL CLIENTE (Izquierda)
+    
+    # Inicia el texto 15 puntos debajo de la línea
+    y_sig = current_y - 15 
+    
+    draw_centered_text_right(c, y_sig, "Firma", left_line_x, line_width) 
+    y_sig -= 13 # Salto
+    draw_centered_text_right(c, y_sig, nombre, left_line_x, line_width, is_bold=True)
+    y_sig -= 12 # Salto
+    draw_centered_text_right(c, y_sig, f"C.I./RIF: {cedula}", left_line_x, line_width, font_size=9)
+    # -----------------------------------------------------
+
+    # -----------------------------------------------------
+    # Bloque 2: RECIBIDO POR (Derecha)
+    
+    # Usamos la misma coordenada inicial para el texto: current_y - 15
+    y_sig_inst = current_y - 15 
+    
+    draw_centered_text_right(c, y_sig_inst, "Recibido por:", right_line_x, line_width)
+    y_sig_inst -= 13 # Salto
+    draw_centered_text_right(c, y_sig_inst, "PRESLEY ORTEGA", right_line_x, line_width, is_bold=True)
+    y_sig_inst -= 12 # Salto
+    # El texto "GERENTE..." es largo, ajustamos el salto y la fuente a 9pt si es necesario.
+    draw_centered_text_right(c, y_sig_inst, "GERENTE DE ADMINISTRACIÓN Y SERVICIOS", right_line_x, line_width, font_size=9)
+    y_sig_inst -= 15 # Salto grande para la Gaceta (línea más pequeña)
+    
+    # Texto Gaceta (fuente 8pt, saltos más pequeños, decremento progresivo)
+    draw_centered_text_right(c, y_sig_inst, "Designado según gaceta oficial n° 43.062 de fecha", right_line_x, line_width, font_size=8)
+    y_sig_inst -= 10
+    draw_centered_text_right(c, y_sig_inst, "16 de febrero de 2025 y Providencia de", right_line_x, line_width, font_size=8)
+    y_sig_inst -= 10
+    draw_centered_text_right(c, y_sig_inst, "n° 016-2024 de fecha 16 de diciembre de 2024", right_line_x, line_width, font_size=8)
+    # -----------------------------------------------------
+
     c.showPage()
     c.save()
     buffer.seek(0)
