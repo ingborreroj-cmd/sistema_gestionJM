@@ -10,21 +10,19 @@ import os
 from django.http import HttpResponse
 from django.utils import timezone
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter, landscape, A4
+from reportlab.lib.pagesizes import letter, landscape 
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT 
 from django.conf import settings
 
-# Asegúrate de que este archivo exista en tu estructura de carpetas:
 from .constants import CATEGORY_CHOICES_MAP 
-from .models import Recibo # Importación local necesaria para importar_recibos_desde_excel
+from .models import Recibo 
 
 logger = logging.getLogger(__name__)
 
-
-# --- Funciones Auxiliares de Conversión ---
 
 def to_boolean(value):
     """Convierte valores comunes de Excel (NaN, SI, X, 1, etc.) a Booleano."""
@@ -89,7 +87,7 @@ def importar_recibos_desde_excel(archivo_excel):
         )
         
         if df.empty:
-             return False, "Error: El archivo Excel está vacío o la hoja 'Hoja2' no contiene datos en el rango esperado (Fila 5).", None
+              return False, "Error: El archivo Excel está vacío o la hoja 'Hoja2' no contiene datos en el rango esperado (Fila 5).", None
 
         fila_datos = df.iloc[0] 
         
@@ -101,7 +99,7 @@ def importar_recibos_desde_excel(archivo_excel):
         rif_cedula_raw = str(fila_mapeada.get(RIF_COL, '')).strip()
         
         if not rif_cedula_raw:
-             return False, "El registro no tiene RIF/Cédula y no se puede procesar.", None
+              return False, "El registro no tiene RIF/Cédula y no se puede procesar.", None
             
         logger.info(f"ÉXITO EN LECTURA: Se encontró el registro con RIF: {rif_cedula_raw}")
         
@@ -120,8 +118,8 @@ def importar_recibos_desde_excel(archivo_excel):
             data_a_insertar['concepto'] = str(fila_mapeada.get('concepto', '')).strip().title()
             
             for i in range(1, 11):
-                 key = f'categoria{i}'
-                 data_a_insertar[key] = to_boolean(fila_mapeada.get(key))
+                key = f'categoria{i}'
+                data_a_insertar[key] = to_boolean(fila_mapeada.get(key))
 
             data_a_insertar['conciliado'] = to_boolean(fila_mapeada.get('conciliado'))
 
@@ -132,10 +130,10 @@ def importar_recibos_desde_excel(archivo_excel):
             fecha_excel = fila_mapeada.get('fecha')
             
             if pd.isna(fecha_excel) or str(fecha_excel).strip() == "":
-                 raise ValueError("El campo 'FECHA' es obligatorio y está vacío.") 
+                raise ValueError("El campo 'FECHA' es obligatorio y está vacío.") 
             
             if isinstance(fecha_excel, str) and fecha_excel.strip().upper() == 'FECHA':
-                 raise ValueError("El campo 'FECHA' contiene la palabra 'FECHA'. Por favor, ingrese una fecha válida.")
+                raise ValueError("El campo 'FECHA' contiene la palabra 'FECHA'. Por favor, ingrese una fecha válida.")
 
             try:
                 fecha_objeto = pd.to_datetime(fecha_excel, errors='raise')
@@ -158,7 +156,7 @@ def importar_recibos_desde_excel(archivo_excel):
         logger.error(f"FALLO DE VALIDACIÓN en el registro: {e}")
         return False, f"Fallo en la carga: Error de validación de datos (revisar consola): {str(e)}", None
     
-# --- Generador de Reporte Excel (Final y Corregido) ---
+# --- Generador de Reporte Excel (Se mantiene igual) ---
 
 def generar_reporte_excel(request_filters, queryset, filtros_aplicados): 
     """
@@ -177,7 +175,7 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
         'Estado', 
         'Monto Total (Bs.)',       
         'N° Transferencia', 
-        'Concepto',                
+        'Concepto',                 
         'Categorías'               
     ]
     
@@ -189,8 +187,8 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
             field_name = f'categoria{i}'
             
             if getattr(recibo, field_name):
-                 nombre_categoria = CATEGORY_CHOICES_MAP.get(field_name, f'Categoría {i} (Desconocida)')
-                 categoria_detalle_nombres.append(nombre_categoria)
+                nombre_categoria = CATEGORY_CHOICES_MAP.get(field_name, f'Categoría {i} (Desconocida)')
+                categoria_detalle_nombres.append(nombre_categoria)
         
         categorias_concatenadas = ', '.join(categoria_detalle_nombres)
 
@@ -256,8 +254,6 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
         for col_num, value in enumerate(headers):
             worksheet_recibos.write(0, col_num, value, bold_format)
             
-        # ❌ Se ha eliminado la sección de 'TOTAL GENERAL' para la hoja Recibos
-        
         # --- Aplicar Formato a la Hoja 'info_reporte' ---
         worksheet_info = writer.sheets['info_reporte']
         worksheet_info.set_column('A:A', 30) # Parámetro
@@ -282,6 +278,7 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
 # --- Configuración de Imagen para PDF ---
 
 try:
+    # ⚠️ Asegúrate de que esta ruta sea válida en tu entorno de Django
     HEADER_IMAGE = os.path.join(
         settings.BASE_DIR, 
         'apps', 
@@ -292,179 +289,214 @@ try:
         'encabezado.png' 
     )
 except AttributeError:
-    # Ruta alternativa para desarrollo o entornos sin settings.BASE_DIR
     HEADER_IMAGE = os.path.join(os.path.dirname(__file__), '..', 'static', 'recibos', 'images', 'encabezado.png')
 
 
-# --- Generador de Reporte PDF (Final y Corregido) ---
+# --- Constantes para PDF ---
+CUSTOM_BLUE_DARK_TABLE = colors.HexColor("#427FBB") 
+CUSTOM_GREY_VERY_LIGHT = colors.HexColor("#F7F7F7")
 
-# 🚀 CORRECCIÓN CLAVE: Se agregó 'filtros_aplicados' como argumento
+
+# --- Función de Encabezado/Pie de Página (Canvas) ---
+
+def draw_report_logo_and_page_number(canvas, doc, total_registros, total_monto_bs):
+    canvas.saveState()
+    width, height = doc.pagesize
+    
+    page_number = canvas.getPageNumber()
+
+    ruta_imagen = HEADER_IMAGE 
+
+    # 🟢 CORRECCIÓN DE RUTA (Solo dibuja en PÁGINA 1)
+    if page_number == 1 and os.path.exists(ruta_imagen):
+        try:
+            img = ImageReader(ruta_imagen)
+            img_width, img_height = img.getSize()
+            scale = min(1.0, 700 / img_width) 
+            draw_width = img_width * scale
+            draw_height = img_height * scale
+            x_center = (width - draw_width) / 2
+            y_top = height - draw_height - 10 
+            # Usamos la variable de ruta
+            canvas.drawImage(ruta_imagen, x=x_center, y=y_top, width=draw_width, height=draw_height)
+        except Exception as e:
+            logger.error(f"Error ReportLab al dibujar el encabezado en PDF: {e}")
+            pass
+            
+    # --- B. Número de Página y Fecha (Pie de Página - EN TODAS LAS PÁGINAS) ---
+    canvas.setFont('Helvetica', 8)
+    footer_text = f"Página {page_number}"
+    
+    canvas.drawString(width - 70, 30, footer_text) 
+    canvas.drawString(36, 30, f"Reporte generado el: {timezone.now().strftime('%d/%m/%Y %H:%M')}")
+    
+    canvas.restoreState()
+
+
+# --- Generador de Reporte PDF ---
+
 def generar_pdf_reporte(queryset, filtros_aplicados):
-    """
-    Genera un reporte PDF masivo usando ReportLab con la estructura solicitada:
-    Encabezado, Título, Filtros, Tabla de Datos y Resumen Final.
-    """
+    
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, 
-        pagesize=letter,
+        pagesize=landscape(letter), 
         leftMargin=36,
         rightMargin=36,
-        topMargin=80,  # Espacio para el encabezado/logo
-        bottomMargin=36
+        topMargin=100, # Espacio para el logo
+        bottomMargin=40
     )
     
     Story = []
     styles = getSampleStyleSheet()
     
+    # Estilos Personalizados
+    styles.add(ParagraphStyle(name='CenteredTitle', alignment=TA_CENTER, fontSize=16, fontName='Helvetica-Bold'))
+    
+    # Estilo para los filtros generales
+    styles.add(ParagraphStyle(name='FilterText', alignment=TA_LEFT, fontSize=9, fontName='Helvetica', spaceAfter=2)) 
+    
+    # Estilos para el resumen alineados a la izquierda
+    # Ambos estilos (ResumenTitleLeft y FilterTextLeft) tienen leftIndent=0 para asegurar que inician en el margen.
+    styles.add(ParagraphStyle(name='ResumenTitleLeft', alignment=TA_LEFT, fontSize=11, fontName='Helvetica-Bold', spaceBefore=5, spaceAfter=5, firstLineIndent=0, leftIndent=0))
+    
+    styles.add(ParagraphStyle(
+        name='FilterTextLeft', 
+        alignment=TA_LEFT, 
+        fontSize=9, 
+        fontName='Helvetica', 
+        spaceAfter=2,
+        leftIndent=0,           # Elimina cualquier sangría general del párrafo
+        firstLineIndent=0       # Elimina cualquier sangría de primera línea
+    )) 
+    
+    styles.add(ParagraphStyle(name='FooterText', alignment=TA_LEFT, fontSize=8, fontName='Helvetica', spaceBefore=10))
+
     # 1. Preparación de Datos y Totales
+    # Importante: Estas variables se usan tanto en el Resumen (Secc. 5) como en el footer (callback)
     total_registros = queryset.count()
     total_monto_bs = queryset.aggregate(total=Sum('total_monto_bs'))['total'] or Decimal(0)
     
-    # Prepara los datos de la tabla (8 Columnas)
+    # 2. Título Principal (Centrado)
+    Story.append(Paragraph("REPORTE DE RECIBOS DE PAGO", styles['CenteredTitle']))
+    Story.append(Spacer(1, 10))
+
+    # 3. Filtros Aplicados (Metadatos/Créditos)
+    
+    periodo_str = filtros_aplicados.get('periodo', 'Todos los períodos')
+    estado_str = filtros_aplicados.get('estado', 'Todos los estados')
+    categorias_str = filtros_aplicados.get('categorias', 'Todas las categorías')
+    
+    # Párrafo de Período solo 
+    periodo_html = f"""
+    <font size=9>
+    <b>Período:</b> {periodo_str}
+    </font>
+    """
+    Story.append(Paragraph(periodo_html, styles['FilterText']))
+    
+    # Párrafo de Filtros Aplicados separado 
+    filtros_html = f"""
+    <font size=9>
+    <b>Filtros aplicados - Estado:</b> {estado_str}, 
+    <b>Categorías:</b> {categorias_str}
+    </font>
+    """
+    Story.append(Paragraph(filtros_html, styles['FilterText']))
+    
+    Story.append(Spacer(1, 8)) 
+    
+    # 4. Preparación y Estilo de la Tabla Detalle
+    
     table_data = []
     table_headers = [
-        'Recibo', 'Nombre', 'Cédula/RIF', 'Estado', 'Fecha', 'Monto Total (Bs.)', 
-        'N° Transf.', 'Concepto y Cat.' # Combinamos estos campos por limitación de espacio
+        'Recibo', 'Nombre', 'Cédula/RIF', 'Monto (Bs)', 'Fecha', 'Estado', 
+        'Transferencia', 'Concepto' 
     ]
     table_data.append(table_headers)
     
-    col_widths = [45, 90, 75, 50, 60, 70, 40, 110] 
+    col_widths = [60, 130, 90, 80, 70, 70, 100, 120] 
     
     for recibo in queryset:
-        categoria_detalle_nombres = []
-        for i in range(1, 11):
-            field_name = f'categoria{i}'
-            if getattr(recibo, field_name):
-                 nombre_categoria = CATEGORY_CHOICES_MAP.get(field_name, f'Cat. {i}')
-                 categoria_detalle_nombres.append(nombre_categoria)
-        
-        categorias_concatenadas = ', '.join(categoria_detalle_nombres)
-        
-        concepto_final = f"{recibo.concepto.strip()}"
-        if categorias_concatenadas:
-             concepto_final += f" (Cats: {categorias_concatenadas})"
-
         table_data.append([
             recibo.numero_recibo,
             recibo.nombre,
             recibo.rif_cedula_identidad,
-            recibo.estado,
-            recibo.fecha.strftime('%Y-%m-%d'),
             format_currency(recibo.total_monto_bs),
+            recibo.fecha.strftime('%d/%m/%Y'),
+            recibo.estado,
             recibo.numero_transferencia if recibo.numero_transferencia else '',
-            concepto_final
+            recibo.concepto.strip()
         ])
 
-    # 2. Función de Encabezado por Página
-    
-    def draw_report_header(canvas, doc, filtros_aplicados, total_registros, total_monto_bs):
-        canvas.saveState()
-        canvas.setFont('Helvetica', 9)
-        width, height = letter
-
-        # --- A. Dibujar Encabezado PNG ---
-        current_y = height - 50
-        if os.path.exists(HEADER_IMAGE):
-             try:
-                 img = ImageReader(HEADER_IMAGE)
-                 img_width, img_height = img.getSize()
-                 scale = min(1.0, 480 / img_width) 
-                 draw_width = img_width * scale
-                 draw_height = img_height * scale
-                 x_center = (width - draw_width) / 2
-                 y_top = height - draw_height - 20
-                 canvas.drawImage(HEADER_IMAGE, x=x_center, y=y_top, width=draw_width, height=draw_height)
-                 current_y = y_top - 30
-             except Exception:
-                 current_y = height - 50 
-
-        # --- B. Título Centrado ---
-        titulo = "REPORTE DE RECIBOS DE PAGO"
-        canvas.setFont("Helvetica-Bold", 12)
-        text_width = canvas.stringWidth(titulo, "Helvetica-Bold", 12)
-        canvas.drawString((width - text_width) / 2, current_y, titulo)
-        current_y -= 25
-
-        # --- C. Filtros Aplicados ---
-        canvas.setFont('Helvetica-Bold', 10)
-        
-        # Fila 1: Período
-        canvas.drawString(36, current_y, "PERÍODO:")
-        canvas.setFont('Helvetica', 10)
-        canvas.drawString(100, current_y, filtros_aplicados.get('periodo', 'Todos los períodos'))
-        
-        # Fila 2: Estado
-        current_y -= 15
-        canvas.setFont('Helvetica-Bold', 10)
-        canvas.drawString(36, current_y, "ESTADO:")
-        canvas.setFont('Helvetica', 10)
-        canvas.drawString(100, current_y, filtros_aplicados.get('estado', 'Todos los estados'))
-        
-        # Fila 3: Categorías (Misma línea que Filtro, más corto)
-        canvas.setFont('Helvetica-Bold', 10)
-        canvas.drawString(width / 2, current_y + 15, "CATEGORÍAS:")
-        canvas.setFont('Helvetica', 10)
-        cat_text = filtros_aplicados.get('categorias', 'Todas')
-        if len(cat_text) > 40:
-             cat_text = cat_text[:37] + '...' 
-        canvas.drawString(width / 2 + 80, current_y + 15, cat_text)
-        
-        current_y -= 20
-        canvas.setFont('Helvetica-Bold', 10)
-        canvas.drawString(36, current_y, "Detalle de Recibos:")
-        
-        canvas.restoreState()
-        
-    # 3. Creación y Estilo de la Tabla
-    
     table = Table(table_data, colWidths=col_widths)
 
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('BACKGROUND', (0, 0), (-1, 0), CUSTOM_BLUE_DARK_TABLE), 
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (5, 1), (5, -1), 'RIGHT'), 
+        ('ALIGN', (3, 1), (3, -1), 'RIGHT'), # Monto sigue a la derecha
+        ('ALIGN', (4, 1), (4, -1), 'CENTER'), # Fecha Centrada
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8), 
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('BACKGROUND', (0, 2), (-1, -1), CUSTOM_GREY_VERY_LIGHT), 
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey), 
+        ('BOX', (0, 0), (-1, -1), 0, colors.white), 
     ]))
     
     Story.append(table)
-    Story.append(Spacer(1, 12))
+    Story.append(Spacer(1, 20))
 
+    # 5. Resumen Final (Estructura de Párrafos Directos)
     
-    # 4. Resumen Final (Totales del Reporte)
+    # Título del resumen
+    Story.append(Paragraph("RESUMEN DEL REPORTE:", styles['ResumenTitleLeft']))
     
-    Story.append(Paragraph("--- RESUMEN DEL REPORTE GENERADO ---", styles['h3']))
-    Story.append(Spacer(1, 6))
+    # 🌟 CAMBIO CRÍTICO: Usar un solo Paragraph por línea para evitar la sangría de la tabla.
     
-    resumen_data = [
-        ['Total Recibos:', total_registros],
-        ['Monto Total (Bs):', format_currency(total_monto_bs)],
-        ['Período:', filtros_aplicados.get('periodo', 'Todos')],
-        ['Estado:', filtros_aplicados.get('estado', 'Todos')],
-        ['Categorías:', filtros_aplicados.get('categorias', 'Todas')],
-        ['Fecha del Reporte:', timezone.now().strftime('%d/%m/%Y %H:%M:%S')],
-    ]
+    Story.append(Paragraph(
+        f"<b>Total de Recibos:</b> {total_registros}", 
+        styles['FilterTextLeft']
+    ))
     
-    resumen_table = Table(resumen_data, colWidths=[120, 420])
-    resumen_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('BACKGROUND', (0, 0), (-1, -1), colors.lightgrey),
-        ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-    ]))
-    
-    Story.append(resumen_table)
-    
-    
-    def my_header_callback(canvas, doc):
-        draw_report_header(canvas, doc, filtros_aplicados, total_registros, total_monto_bs)
+    Story.append(Paragraph(
+        f"<b>Monto Total Bs:</b> {format_currency(total_monto_bs)}", 
+        styles['FilterTextLeft']
+    ))
 
-    doc.build(Story, onFirstPage=my_header_callback, onLaterPages=my_header_callback)
+    # Separador visual
+    Story.append(Spacer(1, 1)) 
+
+    Story.append(Paragraph(
+        f"<b>Período:</b> {periodo_str}", 
+        styles['FilterTextLeft']
+    ))
+    
+    Story.append(Paragraph(
+        f"<b>Estado:</b> {estado_str}", 
+        styles['FilterTextLeft']
+    ))
+    
+    Story.append(Paragraph(
+        f"<b>Categorías:</b> {categorias_str}", 
+        styles['FilterTextLeft']
+    ))
+    
+    Story.append(Spacer(1, 1))
+    
+    # 6. Construir y Devolver el PDF
+    
+    logo_footer_callback = lambda canvas, doc: draw_report_logo_and_page_number(
+        canvas, doc, total_registros, total_monto_bs
+    )
+
+    doc.build(
+        Story, 
+        onFirstPage=logo_footer_callback, 
+        onLaterPages=logo_footer_callback
+    )
     
     buffer.seek(0)
     
