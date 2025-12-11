@@ -218,15 +218,29 @@
     </h1>
     
     {# Zona de Búsqueda #}
-    <div class="mb-4 flex space-x-3">
-        <input type="text" name="q" placeholder="Buscar por N°, Nombre, Cédula/RIF, Transferencia..." 
+  <form method="GET" action=".">
+    <div class="mb-4 flex space-x-3 items-center">
+        <label for="search_field" class="text-sm font-medium text-gray-700 whitespace-nowrap">Buscar por:</label>
+        <select id="search_field" name="search_field" 
+            class="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-auto">
+        
+             <option value="nombre" {% if request.GET.search_field|default:'nombre' == 'nombre' %}selected{% endif %}>Nombre</option>
+            <option value="rif_cedula_identidad" {% if request.GET.search_field == 'rif_cedula_identidad' %}selected{% endif %}>Cédula/RIF</option>
+            <option value="numero_recibo" {% if request.GET.search_field == 'numero_recibo' %}selected{% endif %}>Número de Recibo</option>
+            <option value="numero_transferencia" {% if request.GET.search_field == 'numero_transferencia' %}selected{% endif %}>N° Transferencia</option>
+            <option value="fecha" {% if request.GET.search_field == 'fecha' %}selected{% endif %}>Fecha</option>
+         </select>
+        
+        <input type="text" name="q" placeholder="Ingresa el valor a buscar..." 
                class="flex-grow rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                value="{{ request.GET.q|default:'' }}">
+               
         <button type="submit" name="action" value="filter" 
                 class="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150">
             <i class="fas fa-search"></i> Buscar
         </button>
     </div>
+  </form>
     {# Fin Zona de Búsqueda #}
 
     <div class="overflow-x-auto border rounded-lg">

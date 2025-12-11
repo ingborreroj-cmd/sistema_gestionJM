@@ -1,41 +1,34 @@
 from django.urls import path
 from . import views
 
-# El App Name es crucial para usar {% url 'recibos:...' %} en las plantillas (como dashboard.html)
 app_name = 'recibos'
 
 urlpatterns = [
-    # 1. Dashboard Principal (Filtro, Búsqueda, Paginación, Carga Excel, Anulación)
+    # 1. Dashboard Principal (CORREGIDO: Apunta a la clase ReciboListView)
     path(
         '', 
-        views.dashboard_view, 
+        views.ReciboListView.as_view(), # <--- CORRECCIÓN APLICADA
         name='dashboard'
     ),
 
-    # 2. Generación de Reportes Masivos (Llamada por los botones Excel/PDF del dashboard)
-    # Esta vista recibe los filtros GET y devuelve el archivo
+    # 2. Generación de Reportes Masivos (Se mantiene la función generar_reporte_view)
     path(
         'generar-reporte/', 
         views.generar_reporte_view, 
         name='generar_reporte'
     ),
 
-    # 3. Flujo de Descarga Individual de PDF (Paso Intermedio)
-    # Se utiliza después de una carga exitosa para iniciar la descarga del nuevo recibo.
+    # 3. Flujo de Descarga Individual de PDF (Se mantiene)
     path(
         'descargar-init/<int:pk>/',
         views.init_download_and_refresh,
         name='init_download'
     ),
 
-    # 4. Generación y Envío del PDF Individual Puro
-    # Es la URL que la función JS en 'download_init.html' llama para obtener el archivo.
+    # 4. Generación y Envío del PDF Individual Puro (Se mantiene)
     path(
         'generar-pdf/<int:pk>/',
         views.generar_pdf_recibo,
         name='generar_pdf_recibo'
     ),
-    
-    # NOTA: La URL 'generar_pdf_reporte' de utils.py NO necesita una ruta aquí
-    # porque es una función de utilidad que se llama desde la vista 'generar_reporte_view'.
 ]
