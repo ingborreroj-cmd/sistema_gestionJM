@@ -425,10 +425,6 @@ def dashboard_view(request):
 
 
 def generar_reporte_view(request):
-    """
-    Recibe los parámetros GET, aplica el mismo filtrado que el dashboard,
-    prepara los metadatos y genera un archivo Excel o PDF.
-    """
     
     # 1. Inicializar QuerySet y Metadatos
     recibos_queryset = Recibo.objects.all().order_by('-fecha', '-numero_recibo')
@@ -437,17 +433,15 @@ def generar_reporte_view(request):
     # Diccionario para la hoja 'info_reporte' (Metadatos legibles)
     filtros_aplicados = {}
 
-    # 2. Aplicar Filtros (Alineado con dashboard_view)
+    # 2. Aplicar Filtros (Mantenemos tu lógica original)
 
     # Filtro 1: Estado Geográfico
     estado_seleccionado = request.GET.get('estado')
     if estado_seleccionado and estado_seleccionado != "":
-        # Aplicar filtro al QuerySet
         filters &= Q(estado__iexact=estado_seleccionado)
-        # Guardar valor legible para el reporte
-        filtros_aplicados['estado'] = estado_seleccionado # Usamos el valor directo o el mapeo si es un código
+        filtros_aplicados['estado'] = estado_seleccionado
     else:
-         filtros_aplicados['estado'] = 'Todos los estados'
+        filtros_aplicados['estado'] = 'Todos los estados'
         
     # Filtro 2: Rango de Fechas (Período)
     fecha_inicio_str = request.GET.get('fecha_inicio')
@@ -462,12 +456,20 @@ def generar_reporte_view(request):
         
         if fecha_fin_str:
             filters &= Q(fecha__lte=fecha_fin_str)
-            periodo_str = f"{periodo_str} Hasta: {fecha_fin_str}"
+            # Manejar el caso donde periodo_str era 'Todas las fechas'
+            if periodo_str == 'Todas las fechas':
+                 periodo_str = f"Hasta: {fecha_fin_str}"
+            else:
+                 periodo_str = f"{periodo_str} Hasta: {fecha_fin_str}"
             
     except ValueError:
         pass 
         
-    filtros_aplicados['periodo'] = periodo_str.replace('Todas las fechas Hasta: None', 'Todas las fechas') # Limpieza si solo hay fecha_fin
+    # Limpieza si solo se aplicó fecha_fin
+    if periodo_str == 'Todas las fechas Hasta: Todas las fechas':
+        periodo_str = 'Todas las fechas'
+
+    filtros_aplicados['periodo'] = periodo_str.replace('Todas las fechas Hasta: None', 'Todas las fechas') 
 
 
     # Filtro 3: Categorías
@@ -477,9 +479,7 @@ def generar_reporte_view(request):
 
     for codigo, nombre_display in CATEGORY_CHOICES: 
         if request.GET.get(codigo) == 'on':
-            # Aplicar filtro al QuerySet
             category_filters |= Q(**{f'{codigo}': True})
-            # Guardar valor legible para el reporte
             selected_categories_names.append(nombre_display)
             category_count += 1
             
@@ -493,22 +493,22 @@ def generar_reporte_view(request):
     search_query = request.GET.get('q')
     if search_query:
         query_normalizado = search_query.strip() 
-        # ... (La lógica Q de búsqueda se mantiene igual y se aplica a 'filters') ...
+        
         q_objects = (
              Q(nombre__icontains=search_query) |            
              Q(rif_cedula_identidad__icontains=query_normalizado) | 
              Q(numero_recibo__iexact=query_normalizado) | 
              Q(numero_transferencia__icontains=query_normalizado) |
              Q(estado__icontains=search_query)
-         )
+           )
         try:
              recibo_id = int(search_query.strip())
              q_objects |= Q(id=recibo_id)
         except ValueError:
              pass
         filters &= q_objects
-        filtros_aplicados['busqueda'] = search_query
-    
+        filtros_aplicados['busqueda'] = search_query # Añadir al resumen
+
     # 3. Obtener el QuerySet final
     recibos_filtrados = recibos_queryset.filter(filters)
     
@@ -516,7 +516,7 @@ def generar_reporte_view(request):
     action = request.GET.get('action') 
     
     if action == 'excel':
-        # 🚀 LÓGICA CLAVE: Llamar a la función de utilidad con los metadatos
+        # La llamada a Excel es correcta
         try:
             return generar_reporte_excel(request.GET, recibos_filtrados, filtros_aplicados)
         except Exception as e:
@@ -525,18 +525,14 @@ def generar_reporte_view(request):
             return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
 
     elif action == 'pdf':
-        # ❌ Mantenemos el PDF deshabilitado o con la lógica existente (si ya está funcionando)
-        # Si la implementación actual es funcional (usa ReportLab), la dejamos. 
-        # Si NO ES FUNCIONAL para reporte masivo, se recomienda:
-        messages.error(request, "La generación de Reporte PDF masivo aún no está implementada completamente (Formato Estructurado).")
-        return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
-        
-        # O si deseas usar la versión base, déjala como está:
-        # try:
-        #     return generar_pdf_reporte(recibos_filtrados) 
-        # except Exception as e:
-        #     messages.error(request, f"Error al generar el reporte PDF: {e}")
-        #     return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
+        # 🟢 CORRECCIÓN CLAVE: Llamada correcta a generar_pdf_reporte
+        try:
+            return generar_pdf_reporte(recibos_filtrados, filtros_aplicados)
+        except Exception as e:
+            logger.error(f"Error al generar el reporte PDF: {e}")
+            messages.error(request, f"Error al generar el reporte PDF. Consulte la consola del servidor: {e}")
+            # Redirigir de vuelta a la página de filtros
+            return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
             
     else:
         messages.error(request, "Acción de reporte no válida.")
