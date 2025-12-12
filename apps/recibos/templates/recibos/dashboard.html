@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Dashboard | Sistema de Gestión de Recibos{% endblock title %}</title>
 
-    {# Configuración de Tailwind CSS (Recomendado usar un archivo CSS compilado en producción) #}
+    {# Configuración de Tailwind CSS #}
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -31,14 +31,14 @@
 
 <body class="min-h-screen flex flex-col bg-gray-100">
 
-    {# ================================================================= #}
+    {#=================================================================#}
     {# 1. ENCABEZADO (HEADER) #}
-    {# ================================================================= #}
+    {#=================================================================#}
     <header class="bg-indigo-700 shadow-lg z-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
             <a href="{% url 'recibos:dashboard' %}" class="text-white text-xl font-bold flex items-center">
                 <i class="fas fa-receipt mr-3 text-indigo-300"></i>
-                AppRecibos
+                App Recibos
             </a>
             <div class="flex items-center space-x-4">
                 <span class="text-sm text-indigo-300 hidden sm:inline">Hola, {{ user.first_name|default:user.username }}</span>
@@ -46,9 +46,9 @@
         </div>
     </header>
 
-    {# ================================================================= #}
+    {#=================================================================#}
     {# 2. CONTENIDO PRINCIPAL (MAIN) #}
-    {# ================================================================= #}
+    {#=================================================================#}
     <main class="flex-grow p-4 sm:p-6 lg:p-8">
         <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-white/80 rounded-2xl shadow-xl">
 
@@ -70,9 +70,9 @@
 
             <div class="flex flex-col lg:flex-row gap-6">
 
-                {# ================================================================= #}
+                {#=================================================================#}
                 {# 2.1 ASIDE (PANEL LATERAL: Carga y Logs) #}
-                {# ================================================================= #}
+                {#=================================================================#}
                 <aside class="w-full lg:w-1/4 space-y-6 self-start">
 
                     {# BLOQUE 1: Carga de Archivos #}
@@ -87,11 +87,11 @@
                                 <span class="sr-only">Seleccionar Archivo Excel</span>
                                 <input type="file" name="archivo_recibo" id="excel-file-input" accept=".xlsx" required
                                     class="block w-full text-sm text-gray-500
-                                file:mr-4 file:py-2 file:px-4
-                                file:rounded-lg file:border-0
-                                file:text-sm file:font-semibold
-                                file:bg-indigo-50 file:text-indigo-700
-                                hover:file:bg-indigo-100 transition duration-150"
+                                    file:mr-4 file:py-2 file:px-4
+                                    file:rounded-lg file:border-0
+                                    file:text-sm file:font-semibold
+                                    file:bg-indigo-50 file:text-indigo-700
+                                    hover:file:bg-indigo-100 transition duration-150"
                                 >
                             </label>
                         </form>
@@ -122,7 +122,7 @@
                             class="flex-grow overflow-y-auto bg-gray-50 p-3 rounded-lg text-xs font-mono border border-gray-200">
                             <p class="text-gray-400">Log inicial: Listo para cargar archivo.</p>
                         </div>
-                        
+
                         {# BOTÓN: Limpiar Logs (SÓLO VISUAL) #}
                         <button type="button"
                             data-message="¿Estás seguro que deseas **LIMPIAR el contenido visual de los Logs**? Esto NO borra los recibos de la BD."
@@ -137,9 +137,9 @@
                 </aside>
 
 
-                {# ================================================================= #}
+                {#=================================================================#}
                 {# 2.2 SECTION (CONTENIDO PRINCIPAL: Filtros y Tabla) #}
-                {# ================================================================= #}
+                {#=================================================================#}
                 <section class="w-full lg:w-3/4 space-y-6">
 
                     {# Módulo de Reportes y Filtrado #}
@@ -230,8 +230,6 @@
                                     class="flex-1 min-w-[150px] inline-flex justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
                                     <i class="fas fa-file-pdf mr-2"></i>Generar Reporte PDF
                                 </button>
-                                
-                                {# ELIMINADO: Botón Limpiar Registros (Movido a la sección Logs si se desea la funcionalidad de BD) #}
                             </div>
                         </form>
                     </div>
@@ -246,20 +244,20 @@
                         {# Zona de Búsqueda de la Tabla #}
                         <form method="GET" action=".">
 
-                            {# Mantiene todos los parámetros GET activos (filtros, etc.) excepto 'q', 'field' y 'page' #}
+                            {# Mantiene todos los parámetros GET activos (filtros, etc.) excepto 'q','field' y 'page' #}
                             {% for key, value in request.GET.items %}
                                 {% if key != 'q' and key != 'page' and key != 'field' %}
-                                <input type="hidden" name="{{ key }}" value="{{ value }}">
+                                    <input type="hidden" name="{{ key }}" value="{{ value }}">
                                 {% endif %}
                             {% endfor %}
 
                             <div class="mb-4 flex space-x-3 items-center gap-3">
 
-                                {# Campo de Selección para la Búsqueda #}
+                                {# Campo de Selección para la Búsqueda (Estructura Corregida) #}
                                 <div class="flex-none">
-                                    <label for="search-field" class="sr-only">Buscar por</label>
+                                    <label for="search-field" class="block text-sm font-medium text-gray-700 mb-1">Buscar por</label>
                                     <select id="search-field" name="field"
-                                        class="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                                         <option value="" {% if not request.GET.field %}selected{% endif %}>Todos los campos</option>
                                         <option value="nombre" {% if request.GET.field == 'nombre' %}selected{% endif %}>Nombre</option>
                                         <option value="rif_cedula_identidad" {% if request.GET.field == 'rif_cedula_identidad' %}selected{% endif %}>Cédula/RIF</option>
@@ -359,21 +357,18 @@
 
                                                 {# 1. DESCARGAR (PDF) - Icono de flecha abajo #}
                                                 <a href="{% url 'recibos:init_download' recibo.pk %}"
-                                                  title="Descargar PDF"
-                                                  class="text-green-600 hover:text-green-900 transition duration-150 p-1 rounded hover:bg-green-50">
-                                                  <i class="fas fa-file-pdf text-xl"></i> 
+                                                    title="Descargar PDF"
+                                                    class="text-green-600 hover:text-green-900 transition duration-150 p-1 rounded hover:bg-green-50">
+                                                    <i class="fas fa-file-pdf text-xl"></i>
                                                 </a>
 
-                                                {# 2. MODIFICAR (Icono de lápiz) #}
+                                                {# 2. MODIFICAR (Icono de lápiz) - ENLACE DIRECTO #}
                                                 {% if not recibo.anulado %}
-                                                <button type="button"
-                                                    data-message="La **funcionalidad de Modificar recibos** está pendiente de desarrollo. Por favor, utiliza la carga de archivos Excel si deseas crear nuevos registros."
-                                                    data-confirm-text="Entendido"
-                                                    data-color="yellow"
-                                                    class="modificar-recibo-btn text-blue-600 hover:text-blue-900 transition duration-150 p-1 rounded hover:bg-blue-50"
-                                                    title="Modificar Recibo">
+                                                <a href="{% url 'recibos:modificar_recibo' pk=recibo.pk %}"
+                                                    title="Modificar Recibo"
+                                                    class="text-blue-600 hover:text-blue-900 transition duration-150 p-1 rounded hover:bg-blue-50">
                                                     <i class="fas fa-edit text-xl"></i>
-                                                </button>
+                                                </a>
                                                 {% else %}
                                                 <span title="Recibo Anulado, no se puede modificar" class="text-gray-300 p-1"><i
                                                         class="fas fa-edit text-xl"></i></span>
@@ -476,9 +471,9 @@
                 </section>
             </div>
 
-            {# ================================================================= #}
+            {#=================================================================#}
             {# 3. FORMULARIOS OCULTOS PARA POST #}
-            {# ================================================================= #}
+            {#=================================================================#}
             <form id="anular-form" method="POST" action="{% url 'recibos:dashboard' %}" class="hidden">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="anular">
@@ -494,18 +489,18 @@
         </div>
     </main>
 
-    {# ================================================================= #}
+    {#=================================================================#}
     {# 4. FOOTER #}
-    {# ================================================================= #}
+    {#=================================================================#}
     <footer class="bg-gray-800 text-white p-4 mt-auto">
         <div class="max-w-7xl mx-auto text-center text-sm">
             Sistema de Gestión de Recibos &copy;{% now "Y" %}
         </div>
     </footer>
 
-    {# ================================================================= #}
+    {#=================================================================#}
     {# 5. MODAL DE CONFIRMACIÓN #}
-    {# ================================================================= #}
+    {#=================================================================#}
     <div id="confirmation-modal"
         class="fixed inset-0 bg-gray-600 bg-opacity-75 z-50 hidden transition-opacity duration-300" style="opacity:0;">
         <div class="flex items-center justify-center min-h-screen p-4">
@@ -528,8 +523,13 @@
             </div>
         </div>
     </div>
-    
 
+    {#=================================================================#}
+    {# 6. SCRIPTS JS #}
+    {#=================================================================#}
+    {# Este archivo debe contener la lógica para el botón de carga y el modal de anulación/limpieza #}
+    <script src="{% static 'recibos/js/dashboard.js' %}"></script>
+    {% block extra_js %}{% endblock extra_js %}
 
 </body>
 </html>

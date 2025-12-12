@@ -32,4 +32,6 @@ urlpatterns = [
         views.generar_pdf_recibo,
         name='generar_pdf_recibo'
     ),
+    
+    path('modificar/<int:pk>/', views.modificar_recibo, name='modificar_recibo'),
 ]

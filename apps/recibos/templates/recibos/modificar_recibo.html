@@ -1,0 +1,110 @@
+{% extends 'recibos/dashboard.html' %} 
+{% load static %}
+
+{% block title %}Modificar Recibo N°{{ recibo.numero_recibo }}{% endblock title %}
+
+{% block main_content %}
+
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">
+        <i class="fas fa-edit mr-3 text-blue-600"></i>
+        Modificar/Eliminar Recibo N°{{ recibo.numero_recibo }}
+    </h1>
+
+    <div class="bg-white p-6 rounded-xl shadow-2xl border border-gray-100">
+        
+        <form method="POST" action="{% url 'recibos:modificar_recibo' pk=recibo.pk %}">
+            {% csrf_token %}
+            
+            {# Campos ocultos para la acción de modificar #}
+            <input type="hidden" name="action" id="form-action" value="modificar">
+
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Datos del Recibo</h2>
+
+            {# Renderizado de los campos del formulario #}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {% for field in form %}
+                <div class="col-span-1">
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                        {{ field.label }}:
+                    </label>
+                    {{ field }}
+                    {% if field.errors %}
+                        <p class="text-red-500 text-xs italic mt-1">{{ field.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+
+            {# Botones de Acción #}
+            <div class="flex flex-wrap justify-between items-center pt-4 border-t border-gray-200 gap-4">
+                
+                {# Botón 1: MODIFICAR (Guardar Cambios) #}
+                <button type="submit" 
+                    class="order-2 md:order-1 w-full md:w-auto px-6 py-2 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
+                    <i class="fas fa-save mr-2"></i> Confirmar Modificación
+                </button>
+
+                {# Botón 2: CANCELAR / VOLVER #}
+                <a href="{% url 'recibos:dashboard' %}"
+                    class="order-3 md:order-2 w-full md:w-auto px-6 py-2 text-center border border-gray-300 rounded-lg shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition duration-150">
+                    <i class="fas fa-arrow-left mr-2"></i> Cancelar / Volver
+                </a>
+
+                {# Botón 3: ELIMINAR (Activará el modal de confirmación) #}
+                <button type="button" 
+                    id="eliminar-recibo-btn"
+                    data-recibo-num="{{ recibo.numero_recibo }}"
+                    class="order-1 md:order-3 w-full md:w-auto px-6 py-2 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
+                    <i class="fas fa-trash-alt mr-2"></i> Eliminar Totalmente
+                </button>
+
+            </div>
+        </form>
+
+    </div>
+</div>
+
+{% endblock main_content %}
+
+{% block extra_js %}
+{# Script para manejar el modal de ELIMINAR #}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const eliminarBtn = document.getElementById('eliminar-recibo-btn');
+    const formAction = document.getElementById('form-action');
+
+    if (eliminarBtn) {
+        eliminarBtn.addEventListener('click', function() {
+            const reciboNum = this.dataset.reciboNum;
+            
+            // Usamos la función showModal que definimos en dashboard.js
+            window.showModal(
+                'Confirmación de ELIMINACIÓN PERMANENTE',
+                `¡CUIDADO! ¿Estás seguro que deseas **ELIMINAR PERMANENTEMENTE** el recibo N°${reciboNum} de la base de datos? Esta acción no se puede revertir.`,
+                'Sí, ELIMINAR',
+                'eliminar_confirm', // Nueva acción para el manejador de JS
+                'red'
+            );
+        });
+    }
+
+    // SOBREESCRIBIR el manejador de confirmación para esta vista
+    document.getElementById('confirm-action-button').addEventListener('click', function() {
+        const actionType = this.getAttribute('data-action-type');
+        
+        if (actionType === 'eliminar_confirm') {
+            // 1. Cambiar el valor del campo oculto a 'eliminar'
+            formAction.value = 'eliminar';
+            
+            // 2. Ocultar el modal
+            window.hideModal();
+            
+            // 3. Enviar el formulario para que la vista de Django lo procese
+            document.querySelector('form').submit();
+        } 
+        // Si hay otras acciones, se manejan aquí
+    });
+});
+</script>
+{% endblock extra_js %}

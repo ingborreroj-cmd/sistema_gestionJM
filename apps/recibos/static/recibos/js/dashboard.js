@@ -12,23 +12,18 @@ const confirmButton = document.getElementById('confirm-action-button');
 // Elementos de Carga
 const fileInput = document.getElementById('excel-file-input');
 const uploadStatus = document.getElementById('upload-status');
-const triggerUploadButton = document.getElementById('trigger-upload-button'); // Botón 'Cargar Datos Excel'
+const triggerUploadButton = document.getElementById('trigger-upload-button');
 const uploadForm = document.getElementById('upload-form');
 const logDisplay = document.getElementById('log-display');
 
 // Formularios Ocultos
 const anularForm = document.getElementById('anular-form');
-const clearLogsForm = document.getElementById('clear-logs-form'); // Limpiar BD (Anterior)
+const clearLogsForm = document.getElementById('clear-logs-form'); 
 
 // Nuevo Botón de Logs Visuales
 const clearVisualLogsButton = document.getElementById('clear-visual-logs-button');
 
 let currentFormToSubmit = null; // Variable para rastrear qué formulario debe enviarse
-
-function getCsrfToken() {
-    const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
-    return tokenElement ? tokenElement.value : '';
-}
 
 // =================================================================
 // 2. FUNCIONES DEL MODAL (Hechas globales para acceso en HTML)
@@ -58,7 +53,7 @@ window.showModal = function(title, messageHtml, confirmText, targetAction, confi
     confirmButton.setAttribute('data-action-type', targetAction);
 
     // Lógica para deshabilitar o cambiar texto si es "solo informativo"
-    const isInfoOnly = (confirmColor === 'yellow' && confirmText === 'Entendido');
+    const isInfoOnly = (targetAction === 'info'); // Corregido: usa targetAction
     confirmButton.disabled = isInfoOnly;
 
     modal.classList.remove('hidden');
@@ -107,7 +102,7 @@ function setLoadingState(isLoading, fileName = '') {
 
     } else {
         // Restaurar estado normal
-        triggerUploadButton.disabled = (fileInput.files.length === 0);
+        // Ya no es necesario manejar el estado de disabled aquí, lo hace updateUploadButtonState
         triggerUploadButton.classList.remove('opacity-75', 'cursor-wait');
 
         // Restaurar el texto original si existe
@@ -142,11 +137,9 @@ function updateUploadButtonState(hasFile) {
 document.addEventListener('DOMContentLoaded', function() {
 
     // --- A. Inicialización y Limpieza de Estado ---
-    // Restaurar el estado inicial (para recargas post-POST)
     setLoadingState(false); 
     updateUploadButtonState(fileInput.files.length > 0);
 
-    // Si hay errores, limpiar la selección de archivo (UX)
     const hasErrorMessages = document.querySelector('.bg-red-100');
     if (hasErrorMessages && fileInput) {
         fileInput.value = ''; 
@@ -188,10 +181,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     'indigo'
                 );
             } else {
-                // Función pendiente / Sin archivo
+                // Mensaje informativo (Función pendiente)
                 window.showModal(
                     'Acción Inválida',
-                    'Por favor, selecciona un archivo Excel primero para iniciar la carga. (La creación de recibos individuales aún no está implementada)',
+                    'Por favor, selecciona un archivo Excel primero. (La creación/modificación individual se maneja en la tabla de resultados).',
                     'Entendido',
                     'info',
                     'yellow'
@@ -216,17 +209,6 @@ document.addEventListener('DOMContentLoaded', function() {
             );
         });
     });
-
-    // --- E. Clic en Botón Limpiar Registros (BD - Anterior/Oculto) ---
-    // Este botón se eliminó del HTML en la revisión anterior, pero la funcionalidad puede ser útil.
-    // Lo mantendremos en el código si decides usarlo en el futuro, pero no será activable sin el botón en HTML.
-    // const clearRecordsButton = document.getElementById('clear-logs-button-modal'); 
-    // if (clearRecordsButton) {
-    //     clearRecordsButton.addEventListener('click', function() {
-    //         currentFormToSubmit = clearLogsForm;
-    //         window.showModal('Confirmación de Limpieza de BD', this.dataset.message, this.dataset.confirmText, 'clear_logs', this.dataset.color);
-    //     });
-    // }
 
     // --- F. Clic en Botón Limpiar Logs (Visual) ---
     if (clearVisualLogsButton) {
@@ -295,27 +277,11 @@ confirmButton.addEventListener('click', function() {
                 currentFormToSubmit.submit();
             }, 50); 
         } else {
-            // Anular o Limpiar BD
+            // Anular
             currentFormToSubmit.submit();
             window.hideModal(); 
         }
     }
 });
 
-// --- G. Clic en Botón Modificar Recibo (Tabla) ---
-    document.querySelectorAll('.modificar-recibo-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            if (this.disabled) return; 
-            
-            // Usamos la misma lógica del modal de "Función Pendiente"
-            window.showModal(
-                'Función Pendiente',
-                this.dataset.message,
-                this.dataset.confirmText,
-                'info', // Identificador de acción: info
-                this.dataset.color // yellow
-            );
-        });
-    });
-    
-    // NOTA: El identificador 'info' será manejado por el 'confirmButton.addEventListener' global.
+// 🛑 Bloque G de Modificar eliminado, se asume que se usa un <a> en el HTML.

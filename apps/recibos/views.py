@@ -14,7 +14,7 @@ from django.urls import reverse
 from .utils import importar_recibos_desde_excel, generar_reporte_excel, generar_pdf_reporte
 from django.conf import settings
 from django.views.generic import ListView
-# Asegúrate de que estas constantes estén correctamente definidas en .constants
+from .forms import ReciboForm
 from .constants import CATEGORY_CHOICES_MAP, CATEGORY_CHOICES, ESTADO_CHOICES_MAP
 
 logger = logging.getLogger(__name__)
@@ -541,3 +541,37 @@ def generar_reporte_view(request):
     else:
         messages.error(request, "Acción de reporte no válida.")
         return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
+    
+#nuevas funciones de modificar recibos
+def modificar_recibo(request, pk):
+    recibo = get_object_or_404(Recibo, pk=pk)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'modificar':
+            form = ReciboForm(request.POST, instance=recibo)
+            if form.is_valid():
+                form.save()
+                messages.success(request, f'¡Recibo N°{recibo.numero_recibo} modificado exitosamente!')
+                return redirect('recibos:dashboard')
+            else:
+                messages.error(request, 'Hubo un error al validar los datos del formulario.')
+                # El formulario con errores se pasará al template
+        
+        elif action == 'eliminar':
+            recibo_num = recibo.numero_recibo
+            recibo.delete()
+            messages.success(request, f'¡Recibo N°{recibo_num} ELIMINADO TOTALMENTE de la base de datos!')
+            return redirect('recibos:dashboard')
+
+    else:
+        # GET: Mostrar formulario precargado
+        form = ReciboForm(instance=recibo)
+
+    context = {
+        'form': form,
+        'recibo': recibo,
+        'is_modifying': True,
+    }
+    return render(request, 'recibos/modificar_recibo.html', context)
