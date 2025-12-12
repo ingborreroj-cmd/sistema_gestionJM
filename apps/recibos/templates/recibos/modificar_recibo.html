@@ -5,59 +5,228 @@
 
 {% block main_content %}
 
-<div class="max-w-4xl mx-auto">
-    <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">
-        <i class="fas fa-edit mr-3 text-blue-600"></i>
-        Modificar/Eliminar Recibo N°{{ recibo.numero_recibo }}
-    </h1>
+<div class="max-w-6xl mx-auto w-full">
+    
+    <header class="mb-8 p-4 bg-white rounded-xl shadow-lg border-b-4 border-indigo-600">
+        <h1 class="text-3xl font-extrabold text-gray-900 flex items-center">
+            <i class="fas fa-edit mr-3 text-indigo-600"></i>
+            Gestión de Recibo <span class="text-indigo-600 ml-2">N°{{ recibo.numero_recibo }}</span>
+        </h1>
+        <p class="text-gray-500 text-sm mt-1">
+            Registro ID: <span class="font-mono text-gray-700 font-semibold">{{ recibo.pk }}</span> 
+            | Última Actualización: {{ recibo.fecha_modificacion|date:"d/m/Y h:i A" }}
+        </p>
+    </header>
 
-    <div class="bg-white p-6 rounded-xl shadow-2xl border border-gray-100">
+    <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
         
+        {# Contenedor de Mensajes (Si la vista retorna errores) #}
+        {% for message in messages %}
+        <div class="mb-6 p-4 rounded-lg text-sm {% if message.tags == 'success' %}bg-green-100 text-green-800{% elif message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+            <p class="font-semibold">{{ message }}</p>
+        </div>
+        {% endfor %}
+
         <form method="POST" action="{% url 'recibos:modificar_recibo' pk=recibo.pk %}">
             {% csrf_token %}
             
-            {# Campos ocultos para la acción de modificar #}
             <input type="hidden" name="action" id="form-action" value="modificar">
 
-            <h2 class="text-xl font-semibold text-gray-800 mb-4">Datos del Recibo</h2>
+            <div class="space-y-12">
 
-            {# Renderizado de los campos del formulario #}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                {% for field in form %}
-                <div class="col-span-1">
-                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">
-                        {{ field.label }}:
-                    </label>
-                    {{ field }}
-                    {% if field.errors %}
-                        <p class="text-red-500 text-xs italic mt-1">{{ field.errors.as_text }}</p>
-                    {% endif %}
+                {# ======================================================= #}
+                {# BLOQUE 1: DATOS DEL CLIENTE Y GENERALES #}
+                {# ======================================================= #}
+                <div class="border-b border-gray-200 pb-10">
+                    <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
+                        <i class="fas fa-user-tag mr-3 text-indigo-500"></i>
+                        1. Información Básica y del Cliente
+                    </h2>
+
+                    <div class="mt-4 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-6">
+                        
+                        {# Campo numero_recibo (Readonly) #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.numero_recibo.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.numero_recibo.label }}:</label>
+                            <div class="mt-1">{{ form.numero_recibo }}</div>
+                            {% if form.numero_recibo.errors %} <p class="text-red-500 text-xs mt-1">{{ form.numero_recibo.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo estado #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.estado.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.estado.label }}:</label>
+                            <div class="mt-1">{{ form.estado }}</div>
+                            {% if form.estado.errors %} <p class="text-red-500 text-xs mt-1">{{ form.estado.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo ente_liquidado #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.ente_liquidado.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.ente_liquidado.label }}:</label>
+                            <div class="mt-1">{{ form.ente_liquidado }}</div>
+                            {% if form.ente_liquidado.errors %} <p class="text-red-500 text-xs mt-1">{{ form.ente_liquidado.errors.as_text }}</p> {% endif %}
+                        </div>
+                        
+                        {# Campo nombre #}
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.nombre.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.nombre.label }}:</label>
+                            <div class="mt-1">{{ form.nombre }}</div>
+                            {% if form.nombre.errors %} <p class="text-red-500 text-xs mt-1">{{ form.nombre.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo rif_cedula_identidad #}
+                        <div class="sm:col-span-3">
+                            <label for="{{ form.rif_cedula_identidad.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.rif_cedula_identidad.label }}:</label>
+                            <div class="mt-1">{{ form.rif_cedula_identidad }}</div>
+                            {% if form.rif_cedula_identidad.errors %} <p class="text-red-500 text-xs mt-1">{{ form.rif_cedula_identidad.errors.as_text }}</p> {% endif %}
+                        </div>
+                        
+                        {# Campo direccion_inmueble #}
+                        <div class="sm:col-span-6">
+                            <label for="{{ form.direccion_inmueble.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.direccion_inmueble.label }}:</label>
+                            <div class="mt-1">{{ form.direccion_inmueble }}</div>
+                            {% if form.direccion_inmueble.errors %} <p class="text-red-500 text-xs mt-1">{{ form.direccion_inmueble.errors.as_text }}</p> {% endif %}
+                        </div>
+                    </div>
                 </div>
-                {% endfor %}
-            </div>
 
-            {# Botones de Acción #}
-            <div class="flex flex-wrap justify-between items-center pt-4 border-t border-gray-200 gap-4">
+                {# ======================================================= #}
+                {# BLOQUE 2: MONTOS Y TASAS #}
+                {# ======================================================= #}
+                <div class="border-b border-gray-200 pb-10">
+                    <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
+                        <i class="fas fa-money-bill-wave mr-3 text-green-600"></i>
+                        2. Valores Monetarios y Tasa
+                    </h2>
+
+                    <div class="mt-4 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-6">
+                        
+                        {# Campo gastos_administrativos #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.gastos_administrativos.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.gastos_administrativos.label }} (Bs):</label>
+                            <div class="mt-1">{{ form.gastos_administrativos }}</div>
+                            {% if form.gastos_administrativos.errors %} <p class="text-red-500 text-xs mt-1">{{ form.gastos_administrativos.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo tasa_dia #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.tasa_dia.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.tasa_dia.label }} (USD/Bs):</label>
+                            <div class="mt-1">{{ form.tasa_dia }}</div>
+                            {% if form.tasa_dia.errors %} <p class="text-red-500 text-xs mt-1">{{ form.tasa_dia.errors.as_text }}</p> {% endif %}
+                        </div>
+                        
+                        {# Campo total_monto_bs #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.total_monto_bs.id_for_label }}" class="block text-sm font-bold leading-6 text-gray-900">{{ form.total_monto_bs.label }} (Bs):</label>
+                            <div class="mt-1">{{ form.total_monto_bs }}</div>
+                            {% if form.total_monto_bs.errors %} <p class="text-red-500 text-xs mt-1">{{ form.total_monto_bs.errors.as_text }}</p> {% endif %}
+                        </div>
+                    </div>
+                </div>
                 
-                {# Botón 1: MODIFICAR (Guardar Cambios) #}
-                <button type="submit" 
-                    class="order-2 md:order-1 w-full md:w-auto px-6 py-2 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-blue-600 hover:bg-blue-700 transition duration-150">
-                    <i class="fas fa-save mr-2"></i> Confirmar Modificación
-                </button>
+                {# ======================================================= #}
+                {# BLOQUE 3: CATEGORÍAS (CHECKBOXES CON ETIQUETAS) #}
+                {# ======================================================= #}
+                <div class="border-b border-gray-200 pb-10">
+                    <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
+                        <i class="fas fa-tags mr-3 text-purple-600"></i>
+                        3. Categorías (Marque las que aplican)
+                    </h2>
+                    
+                    <div class="mt-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-y-4 gap-x-8">
+                        
+                        {% for field in form %}
+                            {% if field.name|slice:":9" == 'categoria' %}
+                            <div class="relative flex items-start">
+                                <div class="flex items-center h-6">
+                                    {{ field }}
+                                </div>
+                                <div class="ml-3 text-sm leading-6">
+                                    <label for="{{ field.id_for_label }}" class="font-medium text-gray-900">{{ field.label }}</label>
+                                </div>
+                                {% if field.errors %} <p class="text-red-500 text-xs mt-1">{{ field.errors.as_text }}</p> {% endif %}
+                            </div>
+                            {% endif %}
+                        {% endfor %}
+                        
+                    </div>
+                </div>
 
-                {# Botón 2: CANCELAR / VOLVER #}
-                <a href="{% url 'recibos:dashboard' %}"
-                    class="order-3 md:order-2 w-full md:w-auto px-6 py-2 text-center border border-gray-300 rounded-lg shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition duration-150">
-                    <i class="fas fa-arrow-left mr-2"></i> Cancelar / Volver
-                </a>
+                {# ======================================================= #}
+                {# BLOQUE 4: CONCILIACIÓN Y PAGO #}
+                {# ======================================================= #}
+                <div class="pb-2">
+                    <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
+                        <i class="fas fa-clipboard-check mr-3 text-blue-600"></i>
+                        4. Detalles de Pago y Conciliación
+                    </h2>
 
+                    <div class="mt-4 grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-6">
+                        
+                        {# Campo fecha #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.fecha.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.fecha.label }} (Fecha Pago):</label>
+                            <div class="mt-1">{{ form.fecha }}</div>
+                            {% if form.fecha.errors %} <p class="text-red-500 text-xs mt-1">{{ form.fecha.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo numero_transferencia #}
+                        <div class="sm:col-span-2">
+                            <label for="{{ form.numero_transferencia.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.numero_transferencia.label }}:</label>
+                            <div class="mt-1">{{ form.numero_transferencia }}</div>
+                            {% if form.numero_transferencia.errors %} <p class="text-red-500 text-xs mt-1">{{ form.numero_transferencia.errors.as_text }}</p> {% endif %}
+                        </div>
+                        
+                        {# Campo conciliado #}
+                        <div class="sm:col-span-2 flex items-end pb-1">
+                            <div class="relative flex items-start">
+                                <div class="flex items-center h-6 mt-1">
+                                    {{ form.conciliado }}
+                                </div>
+                                <div class="ml-3 text-base leading-6">
+                                    <label for="{{ form.conciliado.id_for_label }}" class="font-semibold text-gray-900">{{ form.conciliado.label }}</label>
+                                </div>
+                            </div>
+                            {% if form.conciliado.errors %} <p class="text-red-500 text-xs mt-1">{{ form.conciliado.errors.as_text }}</p> {% endif %}
+                        </div>
+
+                        {# Campo concepto #}
+                        <div class="sm:col-span-6">
+                            <label for="{{ form.concepto.id_for_label }}" class="block text-sm font-medium leading-6 text-gray-900">{{ form.concepto.label }}:</label>
+                            <div class="mt-1">{{ form.concepto }}</div>
+                            {% if form.concepto.errors %} <p class="text-red-500 text-xs mt-1">{{ form.concepto.errors.as_text }}</p> {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {# ======================================================= #}
+            {# BOTONES DE ACCIÓN #}
+            {# ======================================================= #}
+            <div class="flex flex-wrap justify-between items-center pt-6 border-t border-gray-200 gap-4 mt-8">
+                
                 {# Botón 3: ELIMINAR (Activará el modal de confirmación) #}
                 <button type="button" 
                     id="eliminar-recibo-btn"
+                    title="Eliminar registro de forma permanente"
                     data-recibo-num="{{ recibo.numero_recibo }}"
-                    class="order-1 md:order-3 w-full md:w-auto px-6 py-2 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
-                    <i class="fas fa-trash-alt mr-2"></i> Eliminar Totalmente
+                    class="order-1 w-full md:w-auto px-6 py-3 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-red-600 hover:bg-red-700 transition duration-150">
+                    <i class="fas fa-trash-alt mr-2"></i> Eliminar
                 </button>
+
+                <div class="flex gap-4 w-full md:w-auto md:order-2">
+                    {# Botón 2: CANCELAR / VOLVER #}
+                    <a href="{% url 'recibos:dashboard' %}"
+                        class="flex-1 px-6 py-3 text-center border border-gray-300 rounded-lg shadow-sm text-base font-medium text-gray-700 bg-white hover:bg-gray-50 transition duration-150">
+                        <i class="fas fa-arrow-left mr-2"></i> Cancelar
+                    </a>
+                    
+                    {# Botón 1: MODIFICAR (Guardar Cambios) #}
+                    <button type="submit" 
+                        title="Guardar los cambios realizados en el formulario"
+                        class="flex-1 px-6 py-3 border border-transparent rounded-lg shadow-md text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition duration-150">
+                        <i class="fas fa-save mr-2"></i> Guardar Cambios
+                    </button>
+                </div>
 
             </div>
         </form>
@@ -68,43 +237,41 @@
 {% endblock main_content %}
 
 {% block extra_js %}
-{# Script para manejar el modal de ELIMINAR #}
+{# Script para manejar el modal de ELIMINAR - NO MODIFICADO #}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const eliminarBtn = document.getElementById('eliminar-recibo-btn');
     const formAction = document.getElementById('form-action');
+    const confirmButton = document.getElementById('confirm-action-button');
 
+    // 1. Manejador para mostrar el modal al hacer clic en ELIMINAR
     if (eliminarBtn) {
         eliminarBtn.addEventListener('click', function() {
             const reciboNum = this.dataset.reciboNum;
             
-            // Usamos la función showModal que definimos en dashboard.js
+            // Reutiliza la función showModal definida en dashboard.js (global)
             window.showModal(
                 'Confirmación de ELIMINACIÓN PERMANENTE',
                 `¡CUIDADO! ¿Estás seguro que deseas **ELIMINAR PERMANENTEMENTE** el recibo N°${reciboNum} de la base de datos? Esta acción no se puede revertir.`,
                 'Sí, ELIMINAR',
-                'eliminar_confirm', // Nueva acción para el manejador de JS
+                'eliminar_confirm', // Acción para el manejador de JS
                 'red'
             );
         });
     }
 
-    // SOBREESCRIBIR el manejador de confirmación para esta vista
-    document.getElementById('confirm-action-button').addEventListener('click', function() {
-        const actionType = this.getAttribute('data-action-type');
-        
-        if (actionType === 'eliminar_confirm') {
-            // 1. Cambiar el valor del campo oculto a 'eliminar'
-            formAction.value = 'eliminar';
+    // 2. Manejador para procesar la confirmación del modal
+    if (confirmButton) {
+        confirmButton.onclick = function() {
+            const actionType = this.getAttribute('data-action-type');
             
-            // 2. Ocultar el modal
-            window.hideModal();
-            
-            // 3. Enviar el formulario para que la vista de Django lo procese
-            document.querySelector('form').submit();
-        } 
-        // Si hay otras acciones, se manejan aquí
-    });
+            if (actionType === 'eliminar_confirm') {
+                formAction.value = 'eliminar';
+                window.hideModal();
+                document.querySelector('form').submit();
+            } 
+        };
+    }
 });
 </script>
 {% endblock extra_js %}

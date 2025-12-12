@@ -2,23 +2,53 @@
 
 from django import forms
 from .models import Recibo 
+from django.core.exceptions import ValidationError
 
-# Clases base de Tailwind para reutilización
-TAILWIND_CLASS = 'form-input w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500'
-DATE_INPUT_CLASS = 'form-input w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500'
+# Clases base de Tailwind modificadas:
+
+# CLASE BASE PARA LA MAYORÍA DE LOS INPUTS (CON BORDE LEVE AHORA)
+TAILWIND_CLASS = 'form-input w-full rounded-lg border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition duration-150'
+DATE_INPUT_CLASS = TAILWIND_CLASS # Reutilizamos la misma clase para la fecha
 
 
 class ReciboForm(forms.ModelForm):
     """
-    Formulario utilizado para la Modificación (y posiblemente la Creación) 
-    de instancias del modelo Recibo.
+    Formulario modificado con normalización de datos y estilos de contorno.
     """
+
+    # =======================================================
+    # 1. NORMALIZACIÓN DE DATOS (clean methods) - MANTENIDOS
+    # =======================================================
+
+    def clean_nombre(self):
+        data = self.cleaned_data['nombre'].strip()
+        return data.title()
+
+    def clean_rif_cedula_identidad(self):
+        data = self.cleaned_data['rif_cedula_identidad'].strip().upper()
+        return data.replace(' ', '').replace('-', '')
+    
+    def clean_ente_liquidado(self):
+        data = self.cleaned_data['ente_liquidado'].strip()
+        return data.upper()
+    
+    def clean_estado(self):
+        data = self.cleaned_data['estado'].strip()
+        return data.title()
+    
+    def clean_numero_transferencia(self):
+        data = self.cleaned_data['numero_transferencia'].strip()
+        return data.upper()
+
+    # =======================================================
+    # 2. META y WIDGETS - (USANDO TAILWIND_CLASS CON BORDE)
+    # =======================================================
+
     class Meta:
         model = Recibo
         
-        # Incluye todos los campos que el usuario puede cambiar.
-        # Excluye los campos de control (numero_recibo, fecha_creacion, anulado)
         fields = [
+            'numero_recibo', 
             'estado',
             'nombre',
             'rif_cedula_identidad',
@@ -43,8 +73,13 @@ class ReciboForm(forms.ModelForm):
             'concepto',
         ]
         
-        # Personalización de Widgets para Tailwind y UX
         widgets = {
+            # CAMPO READONLY: Estilo distinto para readonly
+            'numero_recibo': forms.TextInput(attrs={
+                'readonly': 'readonly', 
+                'class': 'mt-1 block w-full rounded-lg border border-gray-300 bg-gray-100 shadow-inner text-gray-700 font-semibold' # Borde añadido aquí también
+            }),
+
             # 1. Datos del Cliente
             'estado': forms.TextInput(attrs={'class': TAILWIND_CLASS}),
             'nombre': forms.TextInput(attrs={'class': TAILWIND_CLASS}),
@@ -52,16 +87,13 @@ class ReciboForm(forms.ModelForm):
             'direccion_inmueble': forms.Textarea(attrs={'class': TAILWIND_CLASS, 'rows': 2}),
             'ente_liquidado': forms.TextInput(attrs={'class': TAILWIND_CLASS}),
             
-            # 2. Categorías (Usan checkbox por defecto, solo mejoramos la clase si es necesario)
-            # Nota: Los booleanos usan CheckboxInput por defecto.
-
-            # 3. Montos (Aseguramos que sean campos de entrada numérica con 2 decimales)
+            # 2. Montos
             'gastos_administrativos': forms.NumberInput(attrs={'class': TAILWIND_CLASS, 'step': '0.01'}),
-            'tasa_dia': forms.NumberInput(attrs={'class': TAILWIND_CLASS, 'step': '0.0001'}), # 4 decimales
+            'tasa_dia': forms.NumberInput(attrs={'class': TAILWIND_CLASS, 'step': '0.0001'}),
             'total_monto_bs': forms.NumberInput(attrs={'class': TAILWIND_CLASS, 'step': '0.01'}),
             
-            # 4. Conciliación
+            # 3. Conciliación
             'numero_transferencia': forms.TextInput(attrs={'class': TAILWIND_CLASS}),
-            'fecha': forms.DateInput(attrs={'type': 'date', 'class': DATE_INPUT_CLASS}), # Selector de calendario
+            'fecha': forms.DateInput(attrs={'type': 'date', 'class': DATE_INPUT_CLASS}), 
             'concepto': forms.Textarea(attrs={'class': TAILWIND_CLASS, 'rows': 2}),
         }
