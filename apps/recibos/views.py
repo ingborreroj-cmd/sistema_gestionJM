@@ -286,13 +286,17 @@ class ReciboListView(ListView):
         """Maneja todas las acciones POST: Carga de Excel, Anulación, Limpieza."""
         action = request.POST.get('action')
 
+        # 1. ANULACIÓN (Nota: Esta lógica es redundante si solo usas el botón en modificar_recibo)
+        # Se recomienda usar la función modificar_recibo para anular y eliminar esta lógica de aquí,
+        # pero la mantenemos si tienes botones de anulación en el dashboard.
         if action == 'anular':
             recibo_id = request.POST.get('recibo_id')
             if recibo_id:
                 recibo = get_object_or_404(Recibo, pk=recibo_id)
+                # Aplicamos la lógica de anulación aquí
                 if not recibo.anulado:
                     recibo.anulado = True
-                    recibo.estado = 'Anulado'
+                    recibo.estado = 'Anulado' # Opcional: Establecer un estado de 'Anulado'
                     recibo.save()
                     messages.success(request, f"El recibo N°{recibo.numero_recibo} ha sido ANULADO correctamente.")
                 else:
@@ -301,17 +305,21 @@ class ReciboListView(ListView):
                 messages.error(request, "No se proporcionó el ID del recibo a anular.")
             return redirect(reverse('recibos:dashboard'))
 
-        elif action == 'clear_logs': # ✅ Mantenido el nombre de la acción
+        # 2. CLEAR LOGS (ELIMINACIÓN TOTAL)
+        elif action == 'clear_logs': 
+            # ADVERTENCIA: Esta acción borra *todos* los recibos de la BD, no solo los logs visuales.
             Recibo.objects.all().delete()
             messages.success(request, "Todos los recibos han sido eliminados de la base de datos.")
             return redirect(reverse('recibos:dashboard'))
 
+        # 3. UPLOAD (Importación de Excel)
         elif action == 'upload':
             archivo_excel = request.FILES.get('archivo_recibo')
             if not archivo_excel:
                 messages.error(request, "Por favor, sube un archivo Excel.")
             else:
                 try:
+                    # Asegúrate de que 'importar_recibos_desde_excel' esté disponible/importada
                     success, message, nuevo_recibo_id = importar_recibos_desde_excel(archivo_excel)
 
                     if success and nuevo_recibo_id:
@@ -332,27 +340,28 @@ class ReciboListView(ListView):
 
 
     def get_queryset(self):
-        # 1. Base del Queryset
-        # Mantenemos el ordenamiento inicial para la paginación
-        queryset = super().get_queryset().order_by('-fecha', '-numero_recibo')
-
-        # 2. FILTRO: Búsqueda General y Selectiva (q y field) - 💡 CORREGIDO
+        
+        # 🌟🌟🌟 CAMBIO CLAVE: APLICAR FILTRO DE ANULADO=FALSE 🌟🌟🌟
+        # La tabla principal SÓLO debe mostrar los recibos que NO han sido anulados.
+        queryset = Recibo.objects.filter(anulado=False).order_by('-fecha', '-numero_recibo') 
+        # NOTA: Eliminamos super().get_queryset() porque queremos partir del filtro inicial.
+        
+        # 2. FILTRO: Búsqueda General y Selectiva (q y field) 
         search_query = self.request.GET.get('q')
-        search_field = self.request.GET.get('field', '') # <-- Captura el campo a buscar
+        search_field = self.request.GET.get('field', '') # Captura el campo a buscar
 
         if search_query:
             query_normalizado = search_query.strip()
             
             # Lógica para la Búsqueda Selectiva (si se eligió un campo)
             if search_field and search_field != 'todos': 
-                # Construye el filtro dinámicamente, ej: {'nombre__icontains': 'texto'}
                 try:
                     filtro = {f'{search_field}__icontains': query_normalizado}
                     queryset = queryset.filter(**filtro)
                 except Exception as e:
                     logger.error(f"Error al filtrar por campo dinámico {search_field}: {e}")
                     
-            # Lógica para la Búsqueda General (si no se eligió un campo o se dejó en blanco/todos)
+            # Lógica para la Búsqueda General
             else:
                 q_objects = (
                     Q(nombre__icontains=query_normalizado) |
@@ -361,6 +370,7 @@ class ReciboListView(ListView):
                     Q(numero_transferencia__icontains=query_normalizado) |
                     Q(estado__icontains=query_normalizado)
                 )
+                
                 # Intenta buscar por ID si el query es un número
                 try:
                     recibo_id = int(query_normalizado)
@@ -370,12 +380,12 @@ class ReciboListView(ListView):
 
                 queryset = queryset.filter(q_objects)
 
-        # 3. FILTRO: Estado (dropdown) - Lógica existente mantenida
+        # 3. FILTRO: Estado (dropdown)
         estado_seleccionado = self.request.GET.get('estado')
         if estado_seleccionado and estado_seleccionado != "":
             queryset = queryset.filter(estado__iexact=estado_seleccionado)
 
-        # 4. FILTRO: Rango de Fechas - Lógica existente mantenida
+        # 4. FILTRO: Rango de Fechas
         fecha_inicio_str = self.request.GET.get('fecha_inicio')
         fecha_fin_str = self.request.GET.get('fecha_fin')
 
@@ -387,7 +397,7 @@ class ReciboListView(ListView):
         except ValueError:
             pass
 
-        # 5. FILTRO: Categorías (Checkboxes) - Lógica existente mantenida
+        # 5. FILTRO: Categorías (Checkboxes)
         category_filters = Q()
         for codigo, _ in CATEGORY_CHOICES:
             if self.request.GET.get(codigo) == 'on':
@@ -402,7 +412,8 @@ class ReciboListView(ListView):
         context = super().get_context_data(**kwargs)
 
         # Datos para los filtros en el template (Mantenidos)
-        context['estados_db'] = Recibo.objects.exclude(
+        # Nota: Aquí también se debería considerar filtrar por anulado=False si los estados son generados dinámicamente.
+        context['estados_db'] = Recibo.objects.filter(anulado=False).exclude( # <--- Filtro agregado aquí también
             estado__isnull=True
         ).exclude(
             estado__exact=''
@@ -420,25 +431,28 @@ class ReciboListView(ListView):
         if 'page' in request_get_copy:
             del request_get_copy['page']
         
-        # También eliminamos 'q' y 'field' si están solos para asegurar que la paginación no los repita incorrectamente, aunque el HTML ya maneja esto.
-        if 'q' in request_get_copy:
+        # Eliminamos 'q' y 'field' si están solos, para asegurar que la paginación no los repita incorrectamente.
+        if 'q' in request_get_copy and not request_get_copy['q']:
             del request_get_copy['q']
-        if 'field' in request_get_copy:
+        if 'field' in request_get_copy and not request_get_copy['field']:
             del request_get_copy['field']
 
         context['request_get'] = request_get_copy
 
         return context
 
-
-# --- Funciones de Reporte (Mantenidas, ya estaban correctas) ---
+# =======================================================
+# FUNCIONES AUXILIARES (Modificar, Anulados, Reportes)
+# =======================================================
 
 def generar_reporte_view(request):
+    # En esta vista, deberías decidir si los reportes deben incluir recibos ANULADOS o no.
+    # Por defecto, los he dejado para que incluyan todos los recibos para la generación de reportes históricos.
     recibos_queryset = Recibo.objects.all().order_by('-fecha', '-numero_recibo')
     filters = Q()
     filtros_aplicados = {}
     periodo_str = 'Todas las fechas'
-
+    
     # 1. Filtro de Estado
     estado_seleccionado = request.GET.get('estado')
     if estado_seleccionado and estado_seleccionado != "":
@@ -483,9 +497,9 @@ def generar_reporte_view(request):
     else:
         filtros_aplicados['categorias'] = 'Todas las categorías'
         
-    # 4. Filtro de Búsqueda (q y field) - Mantenemos la lógica de búsqueda general para reportes
+    # 4. Filtro de Búsqueda (q y field)
     search_query = request.GET.get('q')
-    search_field = request.GET.get('field', '') # Capturamos el campo también
+    search_field = request.GET.get('field', '') 
 
     if search_query:
         query_normalizado = search_query.strip()
@@ -524,6 +538,7 @@ def generar_reporte_view(request):
 
     if action == 'excel':
         try:
+            # Asegúrate de que generar_reporte_excel esté disponible/importado
             return generar_reporte_excel(request.GET, recibos_filtrados, filtros_aplicados)
         except Exception as e:
             logger.error(f"Error al generar el reporte Excel: {e}")
@@ -532,6 +547,7 @@ def generar_reporte_view(request):
 
     elif action == 'pdf':
         try:
+            # Asegúrate de que generar_pdf_reporte esté disponible/importado
             return generar_pdf_reporte(recibos_filtrados, filtros_aplicados)
         except Exception as e:
             logger.error(f"Error al generar el reporte PDF: {e}")
@@ -541,37 +557,78 @@ def generar_reporte_view(request):
     else:
         messages.error(request, "Acción de reporte no válida.")
         return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
-    
-#nuevas funciones de modificar recibos
+
+# ----------------------------------------------------------------------
+# Funciones para la descarga individual (asume que ya existen)
+# ----------------------------------------------------------------------
+# def init_download_and_refresh(request, pk): ...
+# def generar_pdf_recibo(request, pk): ...
+
+# ----------------------------------------------------------------------
+# Modificar Recibo y Anulación (Mantenido y Reconfirmado)
+# ----------------------------------------------------------------------
+
 def modificar_recibo(request, pk):
+    """
+    Permite modificar un Recibo existente (si no está anulado) o anularlo.
+    """
     recibo = get_object_or_404(Recibo, pk=pk)
+    
+    # 1. REGLA DE INMUTABILIDAD: NO PERMITIR MODIFICAR NI PROCESAR SI ESTÁ ANULADO
+    if recibo.anulado:
+        messages.error(request, f"El recibo N°{recibo.numero_recibo} se encuentra ANULADO y es irreversible. No se pueden realizar cambios.")
+        # Se redirige a la tabla de anulados para que el usuario pueda ver el registro.
+        return redirect(reverse('recibos:recibos_anulados')) 
 
     if request.method == 'POST':
-        action = request.POST.get('action')
+        action = request.POST.get('action') # 'modificar' o 'anular'
 
-        if action == 'modificar':
+        # =======================================================
+        # ACCIÓN 1: ANULAR EL RECIBO (Eliminación Lógica)
+        # =======================================================
+        if action == 'anular':
+            recibo.anulado = True   # Campo 'anulado' en True
+            # Opcional: Establecer un estado de 'Anulado' para reportes o rastreo
+            # recibo.estado = 'Anulado' 
+            recibo.save()
+            messages.warning(request, f"¡Recibo N°{recibo.numero_recibo} ha sido ANULADO exitosamente! (Acción irreversible)")
+            return redirect(reverse('recibos:recibos_anulados')) 
+
+        # =======================================================
+        # ACCIÓN 2: MODIFICAR EL RECIBO
+        # =======================================================
+        else: # Si action es 'modificar' o no está definido
             form = ReciboForm(request.POST, instance=recibo)
+            
             if form.is_valid():
                 form.save()
-                messages.success(request, f'¡Recibo N°{recibo.numero_recibo} modificado exitosamente!')
-                return redirect('recibos:dashboard')
+                messages.success(request, f"¡Recibo N°{recibo.numero_recibo} modificado exitosamente!")
+                return redirect(reverse('recibos:dashboard'))
             else:
-                messages.error(request, 'Hubo un error al validar los datos del formulario.')
-                # El formulario con errores se pasará al template
-        
-        elif action == 'eliminar':
-            recibo_num = recibo.numero_recibo
-            recibo.delete()
-            messages.success(request, f'¡Recibo N°{recibo_num} ELIMINADO TOTALMENTE de la base de datos!')
-            return redirect('recibos:dashboard')
+                messages.error(request, "Error al guardar los cambios. Por favor, revisa los campos.")
 
+    # Manejo del GET
     else:
-        # GET: Mostrar formulario precargado
         form = ReciboForm(instance=recibo)
 
     context = {
-        'form': form,
-        'recibo': recibo,
-        'is_modifying': True,
+        'recibo': recibo, 
+        'form': form,     
     }
+    
     return render(request, 'recibos/modificar_recibo.html', context)
+
+# ----------------------------------------------------------------------
+# Vista de Recibos Anulados (Mantenido y Reconfirmado)
+# ----------------------------------------------------------------------
+def recibos_anulados(request):
+    """
+    Muestra exclusivamente la tabla de recibos que han sido anulados (anulado=True).
+    """
+    recibos_anulados_list = Recibo.objects.filter(anulado=True).order_by('-fecha_creacion')
+    
+    context = {
+        'recibos': recibos_anulados_list,
+        'titulo': 'Recibos Anulados (Irreversibles)',
+    }
+    return render(request, 'recibos/recibos_anulados.html', context)

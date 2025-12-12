@@ -1,3 +1,5 @@
+# apps/recibos/urls.py
+
 from django.urls import path
 from . import views # Asegúrese de que views.py contenga la clase ReciboListView
 
@@ -33,5 +35,9 @@ urlpatterns = [
         name='generar_pdf_recibo'
     ),
     
+    # 5. Modificación/Anulación de Recibo
     path('modificar/<int:pk>/', views.modificar_recibo, name='modificar_recibo'),
+
+    # 💥 RUTA FALTANTE AGREGADA (Soluciona el NoReverseMatch)
+    path('anulados/', views.recibos_anulados, name='recibos_anulados'), 
 ]
