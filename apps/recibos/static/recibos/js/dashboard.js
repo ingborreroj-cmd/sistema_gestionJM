@@ -1,270 +1,321 @@
-let currentFormToSubmit = null;
+// =================================================================
+// 1. VARIABLES GLOBALES Y UTILIDADES
+// =================================================================
+
+// Elementos del Modal
 const modal = document.getElementById('confirmation-modal');
 const modalContent = document.getElementById('modal-content');
 const modalTitle = document.getElementById('modal-title');
 const modalMessage = document.getElementById('modal-message');
 const confirmButton = document.getElementById('confirm-action-button');
-const createReciboButton = document.getElementById('create-recibo-button');
-const uploadForm = document.getElementById('upload-form'); 
+
+// Elementos de Carga
+const fileInput = document.getElementById('excel-file-input');
+const uploadStatus = document.getElementById('upload-status');
+const triggerUploadButton = document.getElementById('trigger-upload-button'); // Botón 'Cargar Datos Excel'
+const uploadForm = document.getElementById('upload-form');
+const logDisplay = document.getElementById('log-display');
+
+// Formularios Ocultos
+const anularForm = document.getElementById('anular-form');
+const clearLogsForm = document.getElementById('clear-logs-form'); // Limpiar BD (Anterior)
+
+// Nuevo Botón de Logs Visuales
+const clearVisualLogsButton = document.getElementById('clear-visual-logs-button');
+
+let currentFormToSubmit = null; // Variable para rastrear qué formulario debe enviarse
 
 function getCsrfToken() {
-  const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
-  return tokenElement ? tokenElement.value : '';
+    const tokenElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    return tokenElement ? tokenElement.value : '';
 }
 
-function showModal(title, messageHtml, confirmText, confirmColor) {
-  modalTitle.textContent = title;
+// =================================================================
+// 2. FUNCIONES DEL MODAL (Hechas globales para acceso en HTML)
+// =================================================================
 
-  const formattedMessage = messageHtml.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-  modalMessage.innerHTML = formattedMessage; 
-  confirmButton.textContent = confirmText;
-  
-  confirmButton.className = 'px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition duration-150';
-  if (confirmColor === 'red') {
-    confirmButton.classList.add('bg-red-600', 'hover:bg-red-700');
-  } else if (confirmColor === 'gray') {
-    confirmButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
-  } else if (confirmColor === 'yellow') { 
-    confirmButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
-  } else if (confirmColor === 'indigo') {
-    confirmButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-  }
+window.showModal = function(title, messageHtml, confirmText, targetAction, confirmColor) {
+    modalTitle.textContent = title;
 
-  // Deshabilita el botón si es Anulado o si es el modal de función pendiente (color 'yellow' y texto 'Entendido')
-  confirmButton.disabled = (confirmColor === 'gray' && confirmText !== 'Sí, Limpiar Logs') || (confirmColor === 'yellow' && confirmText === 'Entendido');
+    // Formatear mensaje para negritas
+    const formattedMessage = messageHtml.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    modalMessage.innerHTML = formattedMessage;
+    confirmButton.textContent = confirmText;
 
-  modal.classList.remove('hidden');
-  setTimeout(() => {
-    modal.style.opacity = '1';
-    modalContent.classList.remove('scale-95', 'opacity-0');
-    modalContent.classList.add('scale-100', 'opacity-100');
-  }, 10); 
-
-  modal.onclick = function(event) {
-    if (event.target === modal) {
-      hideModal();
+    // Aplicar color y resetear clases
+    confirmButton.className = 'px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white transition duration-150';
+    if (confirmColor === 'red') {
+        confirmButton.classList.add('bg-red-600', 'hover:bg-red-700');
+    } else if (confirmColor === 'gray') {
+        confirmButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
+    } else if (confirmColor === 'yellow') {
+        confirmButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+    } else if (confirmColor === 'indigo') {
+        confirmButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
     }
-  };
+
+    // Asignar la acción para el manejador unificado de click
+    confirmButton.setAttribute('data-action-type', targetAction);
+
+    // Lógica para deshabilitar o cambiar texto si es "solo informativo"
+    const isInfoOnly = (confirmColor === 'yellow' && confirmText === 'Entendido');
+    confirmButton.disabled = isInfoOnly;
+
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+        modal.style.opacity = '1';
+        modalContent.classList.remove('scale-95', 'opacity-0');
+        modalContent.classList.add('scale-100', 'opacity-100');
+    }, 10);
+
+    modal.onclick = function(event) {
+        if (event.target === modal) {
+            window.hideModal();
+        }
+    };
 }
 
-function hideModal() {
-  modalContent.classList.remove('scale-100', 'opacity-100');
-  modalContent.classList.add('scale-95', 'opacity-0');
-  modal.style.opacity = '0';
-  setTimeout(() => {
-    modal.classList.add('hidden');
-
-    if (currentFormToSubmit && currentFormToSubmit.id.startsWith('temp-anular-form-')) {
-      currentFormToSubmit.remove(); 
-    }
-    currentFormToSubmit = null; 
-  }, 300);
+window.hideModal = function() {
+    modalContent.classList.remove('scale-100', 'opacity-100');
+    modalContent.classList.add('scale-95', 'opacity-0');
+    modal.style.opacity = '0';
+    setTimeout(() => {
+        modal.classList.add('hidden');
+        currentFormToSubmit = null; // Limpiar la referencia al formulario
+    }, 300);
 }
 
-// Función para controlar el estado de carga (Feedback Visual)
-function setLoadingState(isLoading) {
+// =================================================================
+// 3. MANEJO DE ESTADO DE CARGA (FEEDBACK VISUAL)
+// =================================================================
+
+function setLoadingState(isLoading, fileName = '') {
     if (isLoading) {
-        // Guardar el texto original antes de cambiarlo
-        createReciboButton.dataset.originalHtml = createReciboButton.innerHTML;
-        
+        // Guardar el HTML original
+        triggerUploadButton.dataset.originalHtml = triggerUploadButton.innerHTML;
+
         // Cambiar a estado de carga
-        createReciboButton.disabled = true;
-        createReciboButton.classList.add('opacity-75', 'cursor-wait');
-        createReciboButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+        triggerUploadButton.disabled = true;
+        triggerUploadButton.classList.add('opacity-75', 'cursor-wait');
+        triggerUploadButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+        
+        // Agregar log
+        if (logDisplay) {
+            logDisplay.innerHTML += `<p class="text-yellow-700">[${new Date().toLocaleTimeString()}] Iniciando carga y procesamiento de ${fileName}...</p>`;
+            logDisplay.scrollTop = logDisplay.scrollHeight;
+        }
+
     } else {
         // Restaurar estado normal
-        createReciboButton.disabled = false;
-        createReciboButton.classList.remove('opacity-75', 'cursor-wait');
-        
+        triggerUploadButton.disabled = (fileInput.files.length === 0);
+        triggerUploadButton.classList.remove('opacity-75', 'cursor-wait');
+
         // Restaurar el texto original si existe
-        if (createReciboButton.dataset.originalHtml) {
-           createReciboButton.innerHTML = createReciboButton.dataset.originalHtml;
-        } 
-        // Si no hay original, el DOMContentLoaded actualizará el texto al estado de archivo/sin archivo.
+        if (triggerUploadButton.dataset.originalHtml) {
+            triggerUploadButton.innerHTML = triggerUploadButton.dataset.originalHtml;
+        }
+        
+        // Sincronizar estado del botón con el archivo actual
+        updateUploadButtonState(fileInput.files.length > 0);
     }
 }
 
-// CORRECCIÓN PRINCIPAL: Lógica para enviar el formulario de subida (Excel)
-confirmButton.addEventListener('click', function() {
-    if (currentFormToSubmit && !this.disabled) {
-        console.log(`[ACCIÓN CONFIRMADA] Enviando formulario: ${currentFormToSubmit.id || 'temporal'}`);
-        
-        if (currentFormToSubmit.id === 'upload-form') {
-            // Pasos esenciales para la carga de Excel:
-            hideModal(); // 1. Ocultar el modal inmediatamente.
-            setLoadingState(true); // 2. Activar el spinner.
-            currentFormToSubmit.submit(); // 3. Enviar el formulario.
-        } else {
-            // Esto maneja la anulación y limpieza de logs (no necesita spinner ni ocultar antes de submit)
-            currentFormToSubmit.submit();
-        }
-    }
-});
-
-
-document.addEventListener('DOMContentLoaded', function() {
-  const fileInput = document.getElementById('excel-file-input');
-  const statusElement = document.getElementById('upload-status');
-  const csrfToken = getCsrfToken(); 
-        
-  let fileSelected = false;
-
-  // 💡 CORRECCIÓN UX: Restablecer el botón de carga a su estado normal al cargar la página.
-  // Esto revierte el estado de "Procesando" si la página se recarga después de un POST.
-  setLoadingState(false); 
-
-  if (fileInput) {
-    fileInput.addEventListener('change', function(e) {
-      fileSelected = e.target.files.length > 0;
-      if (fileSelected) {
-        statusElement.textContent = 'Archivo listo para cargar: ' + e.target.files[0].name;
-        statusElement.classList.remove('text-gray-500');
-        statusElement.classList.add('text-indigo-600', 'font-semibold');
-      } else {
-        statusElement.textContent = 'Ningún archivo seleccionado.';
-        statusElement.classList.remove('text-indigo-600', 'font-semibold');
-        statusElement.classList.add('text-gray-500');
-      }
-
-      updateCreateButtonText(fileSelected);
-    });
-
-    // Limpiar el formulario y el estado si hay un error
-    const hasErrorMessages = document.querySelector('.bg-red-100');
-    if (hasErrorMessages) {
-         fileInput.value = ''; 
-         fileSelected = false;
-         updateCreateButtonText(false);
-         statusElement.textContent = 'Ningún archivo seleccionado.';
-         statusElement.classList.remove('text-indigo-600', 'font-semibold');
-         statusElement.classList.add('text-gray-500');
-    }
-
-    updateCreateButtonText(fileInput.files.length > 0);
-  }
-        
-  function updateCreateButtonText(hasFile) {
+function updateUploadButtonState(hasFile) {
     if (hasFile) {
-      createReciboButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
-      createReciboButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-      createReciboButton.innerHTML = '<i class="fas fa-upload mr-2"></i> **CARGAR** Datos Excel';
+        triggerUploadButton.disabled = false;
+        triggerUploadButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700');
+        triggerUploadButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+        triggerUploadButton.innerHTML = '<i class="fas fa-upload mr-2"></i> **CARGAR** Datos Excel';
     } else {
-      createReciboButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-      createReciboButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
-      createReciboButton.innerHTML = '<i class="fas fa-plus-circle mr-2"></i> Crear Nuevo Recibo';
+        triggerUploadButton.disabled = true;
+        triggerUploadButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+        triggerUploadButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700');
+        triggerUploadButton.innerHTML = '<i class="fas fa-arrow-up mr-2"></i> Cargar Datos Excel'; //Texto original
     }
-  }
-        
-  if (createReciboButton) {
-    createReciboButton.addEventListener('click', function() {
-      if (fileSelected) {
-        currentFormToSubmit = uploadForm;
-        showModal(
-          'Confirmación de Carga Masiva',
-          '¿Estás seguro que deseas **cargar los recibos del archivo Excel** seleccionado? Esto creará nuevos registros de forma masiva. Se recomienda solo hacer esto **una vez** por archivo.',
-          'Sí, Cargar Excel',
-          'indigo'
-        );
-      } else {
-        // Manejo de la acción "Crear Nuevo Recibo" (pendiente de implementar)
-        currentFormToSubmit = null; 
-        showModal(
-          'Función Pendiente',
-          'La **creación de recibos individuales** aún no está implementada. Por favor, utiliza la carga de archivos Excel.',
-          'Entendido',
-          'yellow'
-        );
-      }
-    });
-  }
+}
 
-  document.querySelectorAll('.anular-recibo-button').forEach(button => {
-    button.addEventListener('click', function() {
-      if (this.disabled) return; 
-      const actionUrl = this.dataset.actionUrl;
-      const message = this.dataset.message;
-      const confirmText = this.dataset.confirmText;
-      const color = this.dataset.color;
-      
-      const tempForm = document.createElement('form');
-      tempForm.method = 'POST';
-      tempForm.action = actionUrl;
-      tempForm.id = 'temp-anular-form-' + Math.random().toString(36).substring(2, 9); 
-      
-      if (csrfToken) {
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = 'csrfmiddlewaretoken';
-        csrfInput.value = csrfToken;
-        tempForm.appendChild(csrfInput);
-      } else {
-        console.error("CSRF Token no encontrado. La solicitud POST fallará.");
-      }
-      
-      const actionInput = document.createElement('input');
-      actionInput.type = 'hidden';
-      actionInput.name = 'action';
-      actionInput.value = 'anular'; 
-      tempForm.appendChild(actionInput);
 
-      document.body.appendChild(tempForm);
-      
-      currentFormToSubmit = tempForm;
-      
-      showModal('Confirmación de Anulación', message, confirmText, color);
-    });
-  });
-        
-  const clearLogsButton = document.getElementById('clear-logs-button-modal'); 
-  if (clearLogsButton) {
-    clearLogsButton.addEventListener('click', function() {
-      const message = this.dataset.message;
-      const confirmText = this.dataset.confirmText;
-      const color = this.dataset.color;
-      
-      const clearLogsForm = document.getElementById('clear-logs-form');
-      if (clearLogsForm) {
-        currentFormToSubmit = clearLogsForm;
-        showModal('Confirmación de Limpieza', message, confirmText, color);
-      }
-    });
-  }
-  
-  // 💡 OPCIONAL: Auto-descarte de mensajes de éxito
-  const successMessages = document.querySelectorAll('.bg-green-100');
-  successMessages.forEach(message => {
-      // Desvanecer después de 5 segundos
-      setTimeout(() => {
-          message.style.opacity = '0';
-          message.style.transition = 'opacity 0.5s ease-out';
-          
-          // Eliminar del DOM después del desvanecimiento
-          setTimeout(() => {
-              message.remove();
-          }, 500);
-      }, 5000); 
-  });
-});
+// =================================================================
+// 4. EVENTOS (DOMContentLoaded)
+// =================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-        const triggerButton = document.getElementById('trigger-upload-button');
-        const uploadForm = document.getElementById('upload-form');
-        const fileInput = document.getElementById('excel-file-input');
 
-        if (triggerButton && uploadForm) {
-            triggerButton.addEventListener('click', function() {
-                // 1. Verificar si un archivo fue seleccionado
-                if (fileInput.files.length > 0) {
-                    // 2. Si hay un archivo, enviar el formulario
-                    uploadForm.submit();
-                    // Opcional: Deshabilitar el botón para evitar doble clic
-                    triggerButton.disabled = true; 
-                    triggerButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
-                } else {
-                    // 3. Si no hay archivo, mostrar una alerta simple
-                    alert("Por favor, selecciona un archivo Excel primero.");
-                    fileInput.focus();
-                }
-            });
-        }
+    // --- A. Inicialización y Limpieza de Estado ---
+    // Restaurar el estado inicial (para recargas post-POST)
+    setLoadingState(false); 
+    updateUploadButtonState(fileInput.files.length > 0);
+
+    // Si hay errores, limpiar la selección de archivo (UX)
+    const hasErrorMessages = document.querySelector('.bg-red-100');
+    if (hasErrorMessages && fileInput) {
+        fileInput.value = ''; 
+        updateUploadButtonState(false);
+        uploadStatus.textContent = 'Ningún archivo seleccionado.';
+        uploadStatus.classList.remove('text-indigo-600', 'font-semibold');
+        uploadStatus.classList.add('text-gray-500');
+    }
+    
+    // --- B. Manejo de Carga de Archivos ---
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            const hasFile = e.target.files.length > 0;
+            if (hasFile) {
+                uploadStatus.textContent = 'Archivo listo para cargar: ' + e.target.files[0].name;
+                uploadStatus.classList.remove('text-gray-500');
+                uploadStatus.classList.add('text-indigo-600', 'font-semibold');
+            } else {
+                uploadStatus.textContent = 'Ningún archivo seleccionado.';
+                uploadStatus.classList.remove('text-indigo-600', 'font-semibold');
+                uploadStatus.classList.add('text-gray-500');
+            }
+            updateUploadButtonState(hasFile);
+        });
+    }
+
+    // --- C. Clic en Botón de Carga (triggerUploadButton) ---
+    if (triggerUploadButton && uploadForm) {
+        triggerUploadButton.addEventListener('click', function() {
+            if (fileInput.files.length > 0) {
+                currentFormToSubmit = uploadForm;
+                
+                // Muestra modal de confirmación antes de enviar
+                window.showModal(
+                    'Confirmación de Carga Masiva',
+                    `¿Estás seguro que deseas **cargar los recibos del archivo Excel "${fileInput.files[0].name}"**? Esto creará nuevos registros de forma masiva.`,
+                    'Sí, Cargar Excel',
+                    'upload', // Identificador de acción
+                    'indigo'
+                );
+            } else {
+                // Función pendiente / Sin archivo
+                window.showModal(
+                    'Acción Inválida',
+                    'Por favor, selecciona un archivo Excel primero para iniciar la carga. (La creación de recibos individuales aún no está implementada)',
+                    'Entendido',
+                    'info',
+                    'yellow'
+                );
+            }
+        });
+    }
+
+    // --- D. Clic en Botón Anular Recibo (Tabla) ---
+    document.querySelectorAll('.anular-recibo-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const reciboId = this.getAttribute('data-recibo-id');
+            document.getElementById('anular-recibo-id').value = reciboId;
+            currentFormToSubmit = anularForm; // Referencia al formulario oculto
+
+            window.showModal(
+                'Confirmar Anulación',
+                this.getAttribute('data-message'),
+                this.getAttribute('data-confirm-text'),
+                'anular', // Identificador de acción
+                this.getAttribute('data-color')
+            );
+        });
     });
+
+    // --- E. Clic en Botón Limpiar Registros (BD - Anterior/Oculto) ---
+    // Este botón se eliminó del HTML en la revisión anterior, pero la funcionalidad puede ser útil.
+    // Lo mantendremos en el código si decides usarlo en el futuro, pero no será activable sin el botón en HTML.
+    // const clearRecordsButton = document.getElementById('clear-logs-button-modal'); 
+    // if (clearRecordsButton) {
+    //     clearRecordsButton.addEventListener('click', function() {
+    //         currentFormToSubmit = clearLogsForm;
+    //         window.showModal('Confirmación de Limpieza de BD', this.dataset.message, this.dataset.confirmText, 'clear_logs', this.dataset.color);
+    //     });
+    // }
+
+    // --- F. Clic en Botón Limpiar Logs (Visual) ---
+    if (clearVisualLogsButton) {
+        clearVisualLogsButton.addEventListener('click', function() {
+            window.showModal(
+                'Confirmar Limpieza de Logs',
+                this.dataset.message,
+                this.dataset.confirmText,
+                'clear_visual_logs', // Identificador de acción
+                this.dataset.color
+            );
+        });
+    }
+
+    // --- G. Manejo de Filtros Automáticos ---
+    document.querySelectorAll('#estado, #fecha_inicio, #fecha_fin').forEach(element => {
+        element.addEventListener('change', function() {
+            document.getElementById('filter-form').submit();
+        });
+    });
+
+    // --- H. Auto-descarte de Mensajes de Éxito ---
+    const successMessages = document.querySelectorAll('.bg-green-100');
+    successMessages.forEach(message => {
+        setTimeout(() => {
+            message.style.opacity = '0';
+            message.style.transition = 'opacity 0.5s ease-out';
+            setTimeout(() => {
+                message.remove();
+            }, 500);
+        }, 5000); 
+    });
+
+});
+
+// =================================================================
+// 5. MANEJADOR ÚNICO DE CLICK EN EL BOTÓN DE CONFIRMACIÓN DEL MODAL
+// =================================================================
+
+confirmButton.addEventListener('click', function() {
+    const actionType = this.getAttribute('data-action-type');
+
+    if (actionType === 'clear_visual_logs') {
+        // Limpieza de logs visuales (no necesita submit de formulario)
+        if (logDisplay) {
+            logDisplay.innerHTML = `<p class="text-gray-400">[${new Date().toLocaleTimeString()}] Logs visuales limpiados.</p>`;
+            logDisplay.scrollTop = 0;
+        }
+        window.hideModal();
+    } 
+    else if (actionType === 'info') {
+        // Botón 'Entendido' (solo es informativo)
+        window.hideModal();
+    }
+    else if (currentFormToSubmit && !this.disabled) {
+        // Acciones que requieren envío de formulario (Anular, Limpiar BD, Carga Excel)
+        
+        if (actionType === 'upload') {
+            // Lógica especial para la carga de Excel: feedback visual ANTES de submit
+            const fileName = fileInput.files.length > 0 ? fileInput.files[0].name : '';
+            window.hideModal(); // Ocultar antes de submit para ver el spinner
+            setLoadingState(true, fileName);
+            
+            // Retraso pequeño para asegurar que el DOM se actualice (spinner/log) antes de la navegación
+            setTimeout(() => {
+                currentFormToSubmit.submit();
+            }, 50); 
+        } else {
+            // Anular o Limpiar BD
+            currentFormToSubmit.submit();
+            window.hideModal(); 
+        }
+    }
+});
+
+// --- G. Clic en Botón Modificar Recibo (Tabla) ---
+    document.querySelectorAll('.modificar-recibo-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            if (this.disabled) return; 
+            
+            // Usamos la misma lógica del modal de "Función Pendiente"
+            window.showModal(
+                'Función Pendiente',
+                this.dataset.message,
+                this.dataset.confirmText,
+                'info', // Identificador de acción: info
+                this.dataset.color // yellow
+            );
+        });
+    });
+    
+    // NOTA: El identificador 'info' será manejado por el 'confirmButton.addEventListener' global.

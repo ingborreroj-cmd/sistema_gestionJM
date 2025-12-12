@@ -9,3 +9,4 @@ djangorestframework
 django-crispy-forms
 reportlab
 xlsxwriter
+fontawesome
