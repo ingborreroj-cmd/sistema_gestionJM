@@ -6,15 +6,15 @@
 {% block main_content %}
 
 <div class="max-w-full mx-auto p-4 sm:p-6 lg:p-8">
-    
+        
     <header class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-extrabold text-gray-900 flex items-center">
             <i class="fas fa-archive mr-3 text-red-600"></i>
             {{ titulo }}
         </h1>
         <a href="{% url 'recibos:dashboard' %}" 
-           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition duration-150 flex items-center shadow-sm">
-            <i class="fas fa-arrow-left mr-2"></i> Volver al Dashboard Principal
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition duration-150 flex items-center shadow-sm">
+            <i class="fas fa-arrow-left mr-2"></i> Volver al Dashboard
         </a>
     </header>
 
@@ -28,17 +28,18 @@
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Total (Bs)</th>
                     
                     {# CAMBIO 1: Estado del recibo (valor real) #}
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado Geográfico</th> 
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th> 
                     
                     {# CAMBIO 2: Nueva columna para el Estatus de Anulación #}
-                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estatus Anulación</th> 
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estatus</th> 
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for recibo in recibos %}
-                <tr class="hover:bg-red-50 transition duration-100">
+                <tr class="hover:bg-red-100 transition duration-100">
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-700">
-                        {{ recibo.numero_recibo }}
+                        {# 🛑 CAMBIO APLICADO AQUÍ #}
+                        {{ recibo.numero_recibo|stringformat:"04d" }}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {{ recibo.fecha|date:"d/m/Y" }}

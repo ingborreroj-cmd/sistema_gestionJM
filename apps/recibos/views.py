@@ -1,13 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import HttpResponse, FileResponse
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.contrib import messages
 from .models import Recibo
 import io
 import os
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.utils import ImageReader
+from reportlab.platypus import SimpleDocTemplate, Table, Paragraph
 from decimal import Decimal
 import logging
 from django.urls import reverse
@@ -18,7 +19,9 @@ from django.views.generic import ListView, TemplateView
 from .forms import ReciboForm
 from .constants import CATEGORY_CHOICES_MAP, CATEGORY_CHOICES, ESTADO_CHOICES_MAP
 import zipfile
-from django.utils import timezone # Import necesario para el nombre del ZIP
+from django.utils import timezone  # Import necesario para el nombre del ZIP
+import pandas as pd  # Import añadido por contexto de reporte
+from reportlab.lib.styles import getSampleStyleSheet  # Import añadido por contexto de reporte
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +39,10 @@ try:
 except AttributeError:
     HEADER_IMAGE = os.path.join(os.path.dirname(__file__), '..', 'static', 'recibos', 'images', 'encabezado.png')
 
+
 class PaginaBaseView(TemplateView):
     template_name = 'base.html'
+
 
 def draw_text_line(canvas_obj, text, x_start, y_start, font_name="Helvetica", font_size=10, is_bold=False):
     """Dibuja una línea de texto y ajusta la posición Y."""
@@ -46,14 +51,17 @@ def draw_text_line(canvas_obj, text, x_start, y_start, font_name="Helvetica", fo
     canvas_obj.drawString(x_start, y_start, str(text))
     return y_start - 15
 
+
 def format_currency(amount):
     """Formatea el monto como moneda (ej: 1.234,56)."""
     try:
         amount_decimal = Decimal(amount)
+        # Formato que asegura dos decimales y separadores correctos para Venezuela (., y ,)
         formatted = "{:,.2f}".format(amount_decimal)
         return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "0,00"
+
 
 def draw_centered_text_right(canvas_obj, y_pos, text, x_start, width, font_name="Helvetica", font_size=10, is_bold=False):
     """Centra el texto dentro de un ancho específico."""
@@ -62,6 +70,7 @@ def draw_centered_text_right(canvas_obj, y_pos, text, x_start, width, font_name=
     text_width = canvas_obj.stringWidth(text, font, font_size)
     x = x_start + (width - text_width) / 2
     canvas_obj.drawString(x, y_pos, text.upper())
+
 
 def generate_receipt_pdf(recibo_obj):
     """Genera el contenido del PDF individual para un recibo."""
@@ -72,8 +81,9 @@ def generate_receipt_pdf(recibo_obj):
     num_transf = recibo_obj.numero_transferencia if recibo_obj.numero_transferencia else ''
     fecha = recibo_obj.fecha.strftime("%d/%m/%Y")
     concepto = recibo_obj.concepto
-    estado = recibo_obj.estado
+    estado = recibo_obj.estado # ✅ VARIABLE ESTADO DEFINIDA AQUÍ
 
+    # Aplicar zfill(4) al número de recibo individual aquí
     if recibo_obj.numero_recibo:
         num_recibo = str(recibo_obj.numero_recibo).zfill(4)
     else:
@@ -118,33 +128,62 @@ def generate_receipt_pdf(recibo_obj):
     X2_TITLE = 310
     X2_DATA = 470
 
-    current_y = draw_text_line(c, "Estado:", X1_TITLE, current_y, is_bold=True)
-    draw_text_line(c, estado, X1_DATA, current_y + 15, is_bold=False)
-    draw_text_line(c, "Nº Recibo:", X2_TITLE, current_y + 15, is_bold=True)
-    draw_text_line(c, num_recibo, X2_DATA, current_y + 15, is_bold=False)
-    current_y -= 5
+    # ----------------------------------------------------
+    # BLOQUE 1: Estado y Nº Recibo
+    # ----------------------------------------------------
+    # Guardamos la posición Y que vamos a usar en este bloque
+    y_line = current_y 
 
-    current_y = draw_text_line(c, "Recibí de:", X1_TITLE, current_y, is_bold=True)
-    draw_text_line(c, nombre, X1_DATA, current_y + 15, is_bold=False)
-    draw_text_line(c, "Monto Recibido (Bs.):", X2_TITLE, current_y + 15, is_bold=True)
-    draw_text_line(c, monto_formateado, X2_DATA, current_y + 15, is_bold=False)
-    current_y -= 5
+    draw_text_line(c, "Estado:", X1_TITLE, y_line, is_bold=True)
+    draw_text_line(c, estado, X1_DATA, y_line, is_bold=False) # ✅ Usamos la posición original y_line
+    draw_text_line(c, "Nº Recibo:", X2_TITLE, y_line, is_bold=True)
+    draw_text_line(c, num_recibo, X2_DATA, y_line, is_bold=False)
+    
+    current_y -= 20 # Ajustamos current_y una sola vez al terminar el bloque
 
-    current_y = draw_text_line(c, "Rif/C.I:", X1_TITLE, current_y, is_bold=True)
-    draw_text_line(c, cedula, X1_DATA, current_y + 15, is_bold=False)
-    current_y = draw_text_line(c, "Nº Transferencia:", X2_TITLE, current_y + 15, is_bold=True)
-    draw_text_line(c, num_transf, X2_DATA, current_y + 15, is_bold=False)
-    current_y -= 5
+    # ----------------------------------------------------
+    # BLOQUE 2: Recibí de y Monto
+    # ----------------------------------------------------
+    y_line = current_y
 
-    current_y = draw_text_line(c, "Dirección:", X1_TITLE, current_y, is_bold=True)
-    draw_text_line(c, direccion, X1_DATA, current_y + 15, is_bold=False)
-    draw_text_line(c, "Fecha:", X2_TITLE, current_y + 15, is_bold=True)
-    draw_text_line(c, fecha, X2_DATA, current_y + 15, is_bold=False)
-    current_y -= 5
+    draw_text_line(c, "Recibí de:", X1_TITLE, y_line, is_bold=True)
+    draw_text_line(c, nombre, X1_DATA, y_line, is_bold=False)
+    draw_text_line(c, "Monto Recibido (Bs.):", X2_TITLE, y_line, is_bold=True)
+    draw_text_line(c, monto_formateado, X2_DATA, y_line, is_bold=False)
+    current_y -= 20
 
-    current_y = draw_text_line(c, "Concepto:", X1_TITLE, current_y, is_bold=True)
-    draw_text_line(c, concepto, X1_DATA, current_y + 15, is_bold=False)
-    current_y -= 15
+    # ----------------------------------------------------
+    # BLOQUE 3: Rif/C.I y Nº Transferencia
+    # ----------------------------------------------------
+    y_line = current_y
+
+    draw_text_line(c, "Rif/C.I:", X1_TITLE, y_line, is_bold=True)
+    draw_text_line(c, cedula, X1_DATA, y_line, is_bold=False)
+    draw_text_line(c, "Nº Transferencia:", X2_TITLE, y_line, is_bold=True)
+    draw_text_line(c, num_transf, X2_DATA, y_line, is_bold=False)
+    current_y -= 20
+
+    # ----------------------------------------------------
+    # BLOQUE 4: Dirección y Fecha
+    # ----------------------------------------------------
+    y_line = current_y
+
+    draw_text_line(c, "Dirección:", X1_TITLE, y_line, is_bold=True)
+    draw_text_line(c, direccion, X1_DATA, y_line, is_bold=False)
+    draw_text_line(c, "Fecha:", X2_TITLE, y_line, is_bold=True)
+    draw_text_line(c, fecha, X2_DATA, y_line, is_bold=False)
+    current_y -= 20
+
+    # ----------------------------------------------------
+    # BLOQUE 5: Concepto
+    # ----------------------------------------------------
+    y_line = current_y
+
+    draw_text_line(c, "Concepto:", X1_TITLE, y_line, is_bold=True)
+    draw_text_line(c, concepto, X1_DATA, y_line, is_bold=False)
+    current_y -= 35
+
+    # ... (Resto de la lógica de categorías y pie de página permanece igual)
 
     hay_categorias = any(categorias.values())
 
@@ -255,18 +294,23 @@ def generate_receipt_pdf(recibo_obj):
     buffer.seek(0)
     return buffer
 
+
 def generar_pdf_recibo(request, pk):
-    """Genera y devuelve el PDF puro para la descarga (para uso individual)."""
+    """Genera y devuelve el PDF puro para la descarga (parauso individual)."""
     recibo_obj = get_object_or_404(Recibo, pk=pk)
     buffer = generate_receipt_pdf(recibo_obj)
-    filename = f"Recibo_N_{recibo_obj.numero_recibo}.pdf"
+
+    # Aplicar zfill(4) al nombre del archivo descargado
+    num_recibo_zfill = str(recibo_obj.numero_recibo).zfill(4) if recibo_obj.numero_recibo else '0000'
+    filename = f"Recibo_N_{num_recibo_zfill}.pdf"
 
     response = HttpResponse(
         buffer.getvalue(),
         content_type='application/pdf'
     )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Disposition'] = f'attachment;filename="{filename}"'
     return response
+
 
 def generar_zip_recibos(request):
     """
@@ -289,34 +333,35 @@ def generar_zip_recibos(request):
 
 
     zip_buffer = io.BytesIO()
-    
+
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for recibo in recibos:
             try:
                 pdf_buffer = generate_receipt_pdf(recibo)
-                
+
+                # Aplicar zfill(4) al nombre del archivo dentro del ZIP
                 num_recibo_zfill = str(recibo.numero_recibo).zfill(4) if recibo.numero_recibo else '0000'
                 filename = f"Recibo_N_{num_recibo_zfill}_{recibo.rif_cedula_identidad}.pdf"
-                
+
                 zipf.writestr(filename, pdf_buffer.getvalue())
             except Exception as e:
                 logger.error(f"Error al generar el PDF para el recibo PK={recibo.pk}: {e}")
-                
+
 
     zip_buffer.seek(0)
-    
+
     filename_zip = f"Recibos_Masivos_{timezone.now().strftime('%Y%m%d_%H%M%S')}.zip"
     response = HttpResponse(
         zip_buffer.getvalue(),
         content_type='application/zip'
     )
-    response['Content-Disposition'] = f'attachment; filename="{filename_zip}"'
-    
+    response['Content-Disposition'] = f'attachment;filename="{filename_zip}"'
+
     return response
 
 
 def init_download_and_refresh(request, pk):
-    """Renderiza una plantilla con JS que inicia la descarga y redirige."""
+    """Renderiza una plantilla con JS que inicializa la descarga y redirige."""
     context = {
         'recibo_pk': pk,
         'pdf_url': reverse('recibos:generar_pdf_recibo', kwargs={'pk': pk})
@@ -339,13 +384,17 @@ class ReciboListView(ListView):
             if recibo_id:
                 recibo = get_object_or_404(Recibo, pk=recibo_id)
                 if not recibo.anulado:
+
+                    # Aplicar zfill(4) al mensaje de anulación en el dashboard
+                    num_recibo_zfill = str(recibo.numero_recibo).zfill(4) if recibo.numero_recibo else '0000'
+
                     recibo.anulado = True
                     recibo.save()
-                    messages.success(request, f"El recibo N°{recibo.numero_recibo} ha sido ANULADO correctamente.")
+                    messages.success(request, f"El recibo N°{num_recibo_zfill} ha sido ANULADO correctamente.")
                 else:
                     messages.warning(request, "Este recibo ya estaba anulado.")
             else:
-                messages.error(request, "No se proporcionó el ID del recibo a anular.") # Añadido 'request'
+                messages.error(request, "No se proporcionó el ID del recibo a anular.")
             return redirect(reverse('recibos:dashboard'))
 
         elif action == 'clear_logs':
@@ -363,7 +412,7 @@ class ReciboListView(ListView):
 
                     if success and recibos_pks and isinstance(recibos_pks, list):
                         messages.success(request, message)
-                        
+
                         if len(recibos_pks) == 1:
                             # Caso 1: Solo un recibo -> Descarga individual
                             return redirect(reverse('recibos:init_download', kwargs={'pk': recibos_pks[0]}))
@@ -376,11 +425,11 @@ class ReciboListView(ListView):
                         messages.warning(request, message)
 
                     else:
-                        messages.error(request, f"Fallo en la carga de Excel: {message}") # Añadido 'request'
+                        messages.error(request, f"Fallo en la carga de Excel: {message}")
 
                 except Exception as e:
                     logger.error(f"Error al ejecutar la importación de Excel: {e}")
-                    messages.error(request, f"Error interno en la lógica de importación: {e}") # Añadido 'request'
+                    messages.error(request, f"Error interno en la lógica de importación: {e}")
 
             return redirect(reverse('recibos:dashboard'))
 
@@ -392,7 +441,7 @@ class ReciboListView(ListView):
         queryset = Recibo.objects.filter(anulado=False).order_by('-fecha', '-numero_recibo')
 
         search_query = self.request.GET.get('q')
-        search_field = self.request.GET.get('field', '') 
+        search_field = self.request.GET.get('field', '')
 
         if search_query:
             query_normalizado = search_query.strip()
@@ -485,7 +534,6 @@ def generar_reporte_view(request):
 
     estado_seleccionado = request.GET.get('estado')
 
-    estado_seleccionado = request.GET.get('estado')
     if estado_seleccionado and estado_seleccionado != "":
         filters &= Q(estado__iexact=estado_seleccionado)
         filtros_aplicados['estado'] = estado_seleccionado if estado_seleccionado else 'Todos los estados'
@@ -538,14 +586,14 @@ def generar_reporte_view(request):
                 filters &= Q(**filtro)
             except Exception:
                 pass
-        else:
-            q_objects = (
-                Q(nombre__icontains=query_normalizado) |
-                Q(rif_cedula_identidad__icontains=query_normalizado) |
-                Q(numero_recibo__iexact=query_normalizado) |
-                Q(numero_transferencia__icontains=query_normalizado) |
-                Q(estado__icontains=query_normalizado)
-            )
+            else:
+                q_objects = (
+                    Q(nombre__icontains=query_normalizado) |
+                    Q(rif_cedula_identidad__icontains=query_normalizado) |
+                    Q(numero_recibo__iexact=query_normalizado) |
+                    Q(numero_transferencia__icontains=query_normalizado) |
+                    Q(estado__icontains=query_normalizado)
+                )
             try:
                 recibo_id = int(query_normalizado)
                 q_objects |= Q(id=recibo_id)
@@ -564,6 +612,7 @@ def generar_reporte_view(request):
 
     if action == 'excel':
         try:
+            # NOTA: La lógica de formateo para Excel está en utils.py
             return generar_reporte_excel(request.GET, recibos_filtrados, filtros_aplicados)
         except Exception as e:
             logger.error(f"Error al generar el reporte Excel: {e}")
@@ -572,27 +621,31 @@ def generar_reporte_view(request):
 
     elif action == 'pdf':
         try:
-            # 💡 NOTA: Si esto falla, el error está dentro de la función generar_pdf_reporte en utils.py
+            # NOTA: La lógica de formateo para PDF está en utils.py
+            # Si esto falla, el error NO está aquí, sino en utils.py o en un dato.
             return generar_pdf_reporte(recibos_filtrados, filtros_aplicados)
         except Exception as e:
+            # ESTA ES LA CAPTURA DE ERROR QUE DEBE MOSTRAR EL MENSAJE DETALLADO
             logger.error(f"Error al generar el reporte PDF: {e}")
             messages.error(request, f"Error al generar el reporte PDF. Consulte la consola del servidor: {e}")
             return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
 
     else:
-        messages.error(request, "Acción de reporte no válida.") # Añadido 'request'
+        messages.error(request, "Acción de reporte no válida.")
         return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
 
 
 def modificar_recibo(request, pk):
     """
-    Permite modificar un Recibo existente (sino está anulado) o anularlo.
+    Permite modificar un Recibo existente (si no está anulado) o anularlo.
     """
     recibo = get_object_or_404(Recibo, pk=pk)
 
+    # Aplicar formato zfill(4) para mensajes
+    num_recibo_zfill = str(recibo.numero_recibo).zfill(4) if recibo.numero_recibo else '0000'
+
     if recibo.anulado:
-        # Añadido 'request'
-        messages.error(request, f"El recibo N°{recibo.numero_recibo} se encuentra ANULADO y es irreversible. No se pueden realizar cambios.")
+        messages.error(request, f"El recibo N°{num_recibo_zfill} se encuentra ANULADO y es irreversible. No se pueden realizar cambios.")
         return redirect(reverse('recibos:recibos_anulados'))
 
     if request.method == 'POST':
@@ -601,8 +654,8 @@ def modificar_recibo(request, pk):
         if action == 'anular':
             recibo.anulado = True
             recibo.save()
-            # Añadido 'request'
-            messages.warning(request, f"¡Recibo N°{recibo.numero_recibo} ha sido ANULADO exitosamente! (Acción irreversible)")
+            # Aplicar zfill(4) al mensaje de anulación en la vista de modificación
+            messages.warning(request, f"¡Recibo N°{num_recibo_zfill} ha sido ANULADO exitosamente! (Acción irreversible)")
             return redirect(reverse('recibos:recibos_anulados'))
 
         else:
@@ -610,11 +663,9 @@ def modificar_recibo(request, pk):
 
             if form.is_valid():
                 form.save()
-                # 🛑 CORRECCIÓN CRÍTICA: Se agregó 'request' como primer argumento
-                messages.success(request, f"¡Recibo N°{recibo.numero_recibo} modificado exitosamente!")
+                messages.success(request, f"¡Recibo N°{num_recibo_zfill} modificado exitosamente!")
                 return redirect(reverse('recibos:dashboard'))
             else:
-                # Añadido 'request'
                 messages.error(request, "Error al guardar los cambios. Por favor, revisa los campos.")
 
 
@@ -628,6 +679,7 @@ def modificar_recibo(request, pk):
 
     return render(request, 'recibos/modificar_recibo.html', context)
 
+
 def recibos_anulados(request):
     """
     Muestra exclusivamente la tabla de recibos que han sido anulados (anulado=True).
@@ -636,6 +688,6 @@ def recibos_anulados(request):
 
     context = {
         'recibos': recibos_anulados_list,
-        'titulo': 'Recibos Anulados (Irreversibles)',
+        'titulo': 'Recibos Anulados',
     }
     return render(request, 'recibos/recibos_anulados.html', context)

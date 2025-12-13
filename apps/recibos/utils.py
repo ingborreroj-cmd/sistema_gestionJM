@@ -15,7 +15,8 @@ from reportlab.lib.utils import ImageReader
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT # <- TA_RIGHT añadido
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.units import inch # Necesario para definir anchos de columna
 from django.conf import settings
 from unidecode import unidecode
 from .constants import CATEGORY_CHOICES_MAP
@@ -30,6 +31,7 @@ def to_boolean(value):
         return False
     return str(value).strip().lower() in ['sí', 'si', 'true', '1', 'x', 'y']
 
+
 def limpiar_y_convertir_decimal(value):
     """Limpia cualquier carácter no numérico y convierte a Decimal."""
     if pd.isna(value) or value is None:
@@ -43,22 +45,25 @@ def limpiar_y_convertir_decimal(value):
     s_final = s_limpio.replace(',', '.')
 
     if s_final.count('.') > 1:
+        # Si hay más de un punto, asume que el último es el decimal y el resto son separadores de miles
         partes = s_final.rsplit('.', 1)
         s_final = partes[0].replace('.', '') + '.' + partes[1]
 
     try:
         if not s_final:
             return Decimal(0)
-        
+
         return Decimal(s_final)
     except InvalidOperation:
         logger.error(f"Error fatal de conversión de Decimal: '{s_final}' (original: '{value}')")
         return Decimal(0)
 
+
 def format_currency(amount):
     """Formatea el monto como moneda (ej: 1.234,56)."""
     try:
         amount_decimal = Decimal(amount)
+        # Formato que asegura dos decimales y separadores correctos
         return "{:,.2f}".format(amount_decimal).replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "0,00"
@@ -120,7 +125,7 @@ def importar_recibos_desde_excel(archivo_excel):
 
                 if not rif_cedula_raw:
                     raise ValueError(f"Fila {fila_numero}: El campo RIF/Cédula es obligatorio y está vacío para un registro con Nombre: {nombre_raw}.")
-                
+
                 data_a_insertar = {}
                 data_a_insertar['numero_recibo'] = consecutivo_actual
 
@@ -165,7 +170,7 @@ def importar_recibos_desde_excel(archivo_excel):
                     logger.error(f"Fila {fila_numero}: Error al convertir fecha '{fecha_str}': {e}")
                     raise ValueError(f"Fila {fila_numero}: Error de formato de fecha: {fecha_str}.")
 
-                
+
                 recibo_creado = Recibo.objects.create(**data_a_insertar)
                 recibos_creados_pks.append(recibo_creado.pk)
                 consecutivo_actual += 1
@@ -174,11 +179,11 @@ def importar_recibos_desde_excel(archivo_excel):
 
             if recibos_creados_pks:
                 total_creados = len(recibos_creados_pks)
-                primer_num = consecutivo_actual - total_creados
-                ultimo_num = consecutivo_actual - 1
+                primer_num = str(consecutivo_actual - total_creados).zfill(4) # Aplicado zfill(4)
+                ultimo_num = str(consecutivo_actual - 1).zfill(4) # Aplicado zfill(4)
 
                 mensaje = f"Importación masiva exitosa. Se generaron {total_creados} recibos, desde N°{primer_num} hasta N°{ultimo_num}."
-                
+
                 logger.info("Retornando éxito de la función importar_recibos_desde_excel.")
                 return True, mensaje, recibos_creados_pks
             else:
@@ -190,6 +195,7 @@ def importar_recibos_desde_excel(archivo_excel):
         error_message = f"FALLO FATAL DE CARGA: {e}"
         logger.error(error_message, exc_info=True)
         return False, f"Fallo en la carga de Excel: {str(e)}", None
+
 
 def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
     """
@@ -215,15 +221,17 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
         categoria_detalle_nombres = []
         for i in range(1, 11):
             field_name = f'categoria{i}'
-            
+
             if getattr(recibo, field_name):
                 nombre_categoria = CATEGORY_CHOICES_MAP.get(field_name, f'Categoría {i} (Desconocida)')
                 categoria_detalle_nombres.append(nombre_categoria)
 
-        categorias_concatenadas = ', '.join(categoria_detalle_nombres)
+        categorias_concatenadas = ','.join(categoria_detalle_nombres)
 
+        # Se corrigió la lista de 'row' para coincidir con 'headers'
         row = [
-            recibo.numero_recibo,
+            # Aplicado zfill(4) para el formato 0001
+            "{:04d}".format(recibo.numero_recibo), 
             recibo.nombre,
             recibo.rif_cedula_identidad,
             recibo.fecha.strftime('%Y-%m-%d'),
@@ -278,7 +286,7 @@ def generar_reporte_excel(request_filters, queryset, filtros_aplicados):
         # Formato de encabezados
         for col_num, value in enumerate(headers):
             worksheet_recibos.write(0, col_num, value, bold_format)
-        
+
         # Formato de info_reporte
         worksheet_info = writer.sheets['info_reporte']
         worksheet_info.set_column('A:A', 30)
@@ -316,7 +324,7 @@ CUSTOM_BLUE_DARK_TABLE = colors.HexColor("#427FBB")
 CUSTOM_GREY_VERY_LIGHT = colors.HexColor("#F7F7F7")
 
 
-# 🛑 CORRECCIÓN 1: Eliminados los argumentos innecesarios (total_registros, total_monto_bs)
+# El callback de ReportLab solo acepta canvas y doc
 def draw_report_logo_and_page_number(canvas, doc):
     canvas.saveState()
     width, height = doc.pagesize
@@ -363,53 +371,50 @@ def generar_pdf_reporte(queryset, filtros_aplicados):
     Story = []
     styles = getSampleStyleSheet()
 
+    # Definición de estilos de ReportLab
     styles.add(ParagraphStyle(name='CenteredTitle', alignment=TA_CENTER, fontSize=16, fontName='Helvetica-Bold'))
 
-    styles.add(ParagraphStyle(name='FilterText', alignment=TA_LEFT, fontSize=9, fontName='Helvetica', spaceAfter=2))
-
-    styles.add(ParagraphStyle(name='ResumenTitleLeft', alignment=TA_LEFT, fontSize=11, fontName='Helvetica-Bold', spaceBefore=5, spaceAfter=5, firstLineIndent=0, leftIndent=0))
-
+    # ESTILO PRINCIPAL PARA TEXTO DE FILTROS/RESUMEN
     styles.add(ParagraphStyle(
         name='FilterTextLeft',
         alignment=TA_LEFT,
-        fontSize=9,
-        fontName='Helvetica',
+        fontSize=9, 
+        fontName='Helvetica', 
         spaceAfter=2,
         leftIndent=0,
-        firstLineIndent=0
+        firstLineIndent=0,
+        leading=12 
     ))
 
-    styles.add(ParagraphStyle(name='FooterText', alignment=TA_LEFT, fontSize=8, fontName='Helvetica', spaceBefore=10))
+    styles.add(ParagraphStyle(name='ResumenTitleLeft', alignment=TA_LEFT, fontSize=11, fontName='Helvetica-Bold', spaceBefore=5, spaceAfter=5, firstLineIndent=0, leftIndent=0))
 
     total_registros = queryset.count()
     total_monto_bs = queryset.aggregate(total=Sum('total_monto_bs'))['total'] or Decimal(0)
 
+    # --- TÍTULO ---
     Story.append(Paragraph("REPORTE DE RECIBOS DE PAGO", styles['CenteredTitle']))
     Story.append(Spacer(1, 10))
 
-
+    # --- FILTROS APLICADOS (Corregida sintaxis ReportLab) ---
     periodo_str = filtros_aplicados.get('periodo', 'Todos los períodos')
     estado_str = filtros_aplicados.get('estado', 'Todos los estados')
     categorias_str = filtros_aplicados.get('categorias', 'Todas las categorías')
-
-    periodo_html = f"""
-    <font size=9>
-    <b>Período:</b> {periodo_str}
-    </font>
-    """
-    Story.append(Paragraph(periodo_html, styles['FilterText']))
-
+    
+    Story.append(Paragraph(
+        f"<b>Período:</b> {periodo_str}",
+        styles['FilterTextLeft']
+    ))
+    
     filtros_html = f"""
-    <font size=9>
-    <b>Filtros aplicados - Estado:</b> {estado_str},
+    <b>Estado:</b> {estado_str}, 
     <b>Categorías:</b> {categorias_str}
-    </font>
     """
-    Story.append(Paragraph(filtros_html, styles['FilterText']))
+    Story.append(Paragraph(filtros_html, styles['FilterTextLeft']))
 
     Story.append(Spacer(1, 8))
 
 
+    # --- TABLA DE DATOS ---
     table_data = []
     table_headers = [
         'Recibo', 'Nombre', 'Cédula/RIF', 'Monto (Bs)', 'Fecha', 'Estado',
@@ -417,41 +422,62 @@ def generar_pdf_reporte(queryset, filtros_aplicados):
     ]
     table_data.append(table_headers)
 
-    col_widths = [60, 130, 90, 80, 70, 70, 100, 120]
+    # **🛑 CORRECCIÓN DE ANCHO DE COLUMNAS (Usando 'inch' para asegurar el ajuste)**
+    # El ancho de la página horizontal es 11 pulgadas, con márgenes de 36 puntos (0.5 in) a cada lado.
+    # Ancho utilizable es 10 pulgadas.
+    col_widths = [
+        0.7 * inch,  # Recibo 
+        1.7 * inch,  # Nombre 
+        1.1 * inch,  # Cédula/RIF 
+        1.0 * inch,  # Monto (Bs) 
+        0.8 * inch,  # Fecha 
+        0.9 * inch,  # Estado 
+        1.3 * inch,  # Transferencia 
+        2.5 * inch   # Concepto 
+    ]
+    # Suma de anchos: 10.0 pulgadas (720 puntos), que cabe perfecto.
 
     for recibo in queryset:
+        # Usamos el estilo FilterTextLeft (tamaño 9) para el contenido del concepto
+        concepto_paragrah = Paragraph(recibo.concepto.strip() if recibo.concepto else '', styles['FilterTextLeft']) 
+        
         table_data.append([
-            recibo.numero_recibo,
+            "{:04d}".format(recibo.numero_recibo) if recibo.numero_recibo else '', 
             recibo.nombre,
             recibo.rif_cedula_identidad,
             format_currency(recibo.total_monto_bs),
             recibo.fecha.strftime('%d/%m/%Y'),
             recibo.estado,
             recibo.numero_transferencia if recibo.numero_transferencia else '',
-            recibo.concepto.strip()
+            concepto_paragrah # Campo Paragraph
         ])
 
-    table = Table(table_data, colWidths=col_widths)
+    # **🛑 CORRECCIÓN: Se usa la lista de anchos en pulgadas directamente.**
+    table = Table(table_data, colWidths=col_widths) 
 
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), CUSTOM_BLUE_DARK_TABLE),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (3, 1), (3, -1), 'RIGHT'), # <- CORRECCIÓN 3: Monto alineado a la derecha
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('ALIGN', (3, 1), (3, -1), 'RIGHT'), # Monto alineado a la derecha
         ('ALIGN', (4, 1), (4, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
         ('BACKGROUND', (0, 2), (-1, -1), CUSTOM_GREY_VERY_LIGHT),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ('BOX', (0, 0), (-1, -1), 0, colors.white),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.black),
+        # Alineación del contenido del Concepto (que es un Paragraph)
+        ('VALIGN', (7, 1), (7, -1), 'MIDDLE'),
+        ('ALIGN', (7, 1), (7, -1), 'LEFT'),
     ]))
 
     Story.append(table)
     Story.append(Spacer(1, 20))
 
 
+    # --- RESUMEN DEL REPORTE ---
     Story.append(Paragraph("RESUMEN DEL REPORTE:", styles['ResumenTitleLeft']))
 
 
@@ -468,23 +494,21 @@ def generar_pdf_reporte(queryset, filtros_aplicados):
     Story.append(Spacer(1, 1))
 
     Story.append(Paragraph(
-        f"<b>Período:</b> {periodo_str}",
+        f"<b>Período Filtrado:</b> {periodo_str}",
         styles['FilterTextLeft']
     ))
 
     Story.append(Paragraph(
-        f"<b>Estado:</b> {estado_str}",
+        f"<b>Estado Filtrado:</b> {estado_str}",
         styles['FilterTextLeft']
     ))
 
     Story.append(Paragraph(
-        f"<b>Categorías:</b> {categorias_str}",
+        f"<b>Categorías Filtradas:</b> {categorias_str}",
         styles['FilterTextLeft']
     ))
 
-    Story.append(Spacer(1, 1))
-
-    # 🛑 CORRECCIÓN 2: Se llama la función lambda sin pasar los argumentos que ya no existen
+    # Llamada al constructor con el callback corregido
     logo_footer_callback = lambda canvas, doc: draw_report_logo_and_page_number(
         canvas, doc
     )
