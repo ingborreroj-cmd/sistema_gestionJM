@@ -1,8 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
 
-    // =========================================================
     // 1. COMPONENTES DEL DOM
-    // =========================================================
     const excelFileInput = document.getElementById('excel-file-input');
     const uploadStatus = document.getElementById('upload-status');
     const generationStatus = document.getElementById('generation-status');
@@ -24,14 +22,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Componentes de Filtros
     const filterForm = document.getElementById('filter-form'); 
 
-    // =========================================================
     // 3. LÓGICA DE LOGS (Persistencia con LocalStorage)
-    // =========================================================
     const LOG_STORAGE_KEY = 'receipt_logs';
 
-    /**
-     * Guarda el log en localStorage.
-     */
     function saveLog(message, type) {
         const logs = JSON.parse(localStorage.getItem(LOG_STORAGE_KEY) || '[]');
         logs.push({ message, type });
@@ -40,9 +33,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     /**
      * Añade un mensaje al área visual de logs y lo persiste si es necesario.
-     * @param {string} message - El mensaje a mostrar.
-     * @param {string} type - 'success', 'error', 'warning', 'info', 'action', 'client'.
-     * @param {boolean} persist - Si el log debe guardarse en localStorage.
+     * @param {string} message 
+     * @param {string} type 
+     * @param {boolean} persist 
      */
     function appendLog(message, type = 'info', persist = true) {
         const logItem = document.createElement('p');
@@ -106,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    // Capturar y mostrar mensajes de Django (El resultado final del servidor)
+    // Capturar y mostrar mensajes de Django
     const djangoMessageCatcher = document.getElementById('django-message-catcher');
     if (djangoMessageCatcher) {
         const messages = djangoMessageCatcher.querySelectorAll('.message-django');
@@ -130,9 +123,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
 
-    // =========================================================
-    // 2. LÓGICA DE CARGA DE ARCHIVOS (Logs Dinámicos)
-    // =========================================================
+    // LÓGICA DE CARGA DE ARCHIVOS 
 
     // Manejar la selección de archivos
     excelFileInput.addEventListener('change', function() {
@@ -160,17 +151,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Manejar el clic en el botón de subida (que activa el envío del formulario)
     triggerUploadButton.addEventListener('click', function() {
         if (!this.disabled) {
-            // Deshabilitar UI durante la subida
             triggerUploadButton.disabled = true;
             triggerUploadButton.textContent = 'Procesando...';
             triggerUploadButton.classList.remove('bg-green-600', 'hover:bg-green-700');
             triggerUploadButton.classList.add('bg-gray-500');
             generationStatus.textContent = 'El procesamiento puede tardar unos segundos...';
             
-            // Log Dinámico 2: Inicio de Proceso (Tipo Action - PERSISTE)
             appendLog('Solicitud de REGISTRO: Enviando archivo. El servidor está procesando la creación de recibos y planillas.', 'action', true);
 
             // Enviar el formulario
@@ -178,18 +166,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // =========================================================
-    // 5. LÓGICA DE FILTROS Y REPORTES (Logs Dinámicos - CORRECCIÓN)
-    // =========================================================
+    // 5. LÓGICA DE FILTROS Y REPORTES
 
     if (filterForm) {
         filterForm.addEventListener('submit', function(e) {
             
             const formData = new FormData(filterForm);
-            // Capturamos el valor 'action'. Si no hay 'action' es probable que se haya presionado Enter.
             const action = formData.get('action'); 
 
-            // --- CASO 1: APLICAR FILTROS (Activado por 'filter' o por envío sin acción específica) ---
             if (action === 'filter' || !action) {
                 
                 // --- Lógica para construir el mensaje de filtros ---
@@ -221,38 +205,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     logMessage = 'Filtros de búsqueda vacíos. Se está recargando la tabla principal (sin filtros).';
                 }
 
-                // Log Dinámico: Filtros Aplicados
+                // Log: Filtros Aplicados
                 appendLog(logMessage, 'action', true);
             } 
             
-            // --- CASO 2: GENERAR REPORTE EXCEL ---
+            // GENERAR REPORTE EXCEL ---
             else if (action === 'excel') {
-                 // Log Dinámico: Solicitud de Excel
                 appendLog('SOLICITUD DE REPORTE: Generando archivo Excel (XLSX) con los filtros actuales...', 'action', true);
             }
             
-            // --- CASO 3: GENERAR REPORTE PDF ---
+            // GENERAR REPORTE PDF ---
             else if (action === 'pdf') {
-                 // Log Dinámico: Solicitud de PDF
                 appendLog('SOLICITUD DE REPORTE: Generando documento PDF con los filtros actuales...', 'action', true);
             }
-            
-            // El formulario se envía automáticamente ya que no llamamos a e.preventDefault().
-            // El log es persistente, por lo que aparecerá después de la recarga del dashboard
-            // o antes de la descarga del reporte.
         });
     }
 
 
-    // =========================================================
     // 4. LÓGICA DEL MODAL DE CONFIRMACIÓN (Anulación)
-    // =========================================================
 
     /**
-     * Muestra el modal de confirmación. (Sin cambios)
+     * Muestra el modal de confirmación.
      */
     window.showModal = function(message, confirmText, color, formTarget, reciboId = null) {
-        // ... Lógica para mostrar modal (se mantiene) ...
+        // ... Lógica para mostrar modal  ...
         modalMessage.innerHTML = message;
         confirmButton.textContent = confirmText;
         
@@ -285,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 10);
     }
 
-    // Oculta el modal (Sin cambios)
+    // Oculta el modal 
     window.hideModal = function() { 
         modal.style.opacity = '0';
         modalContent.classList.remove('scale-100', 'opacity-100');
@@ -332,9 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
         hideModal(); 
     });
 
-    // =========================================================
-    // 6. LISTENERS DE ACCIÓN (Sin cambios)
-    // =========================================================
+    // 6. LISTENERS DE ACCIÓN
 
     // Listener para el botón de ANULAR RECIBO (Tabla del Dashboard)
     document.querySelectorAll('.anular-recibo-btn').forEach(button => {
@@ -372,8 +346,5 @@ document.addEventListener('DOMContentLoaded', function() {
         );
     });
 
-    // =========================================================
-    // 7. INICIALIZACIÓN
-    // =========================================================
     loadPersistedLogs();
 });

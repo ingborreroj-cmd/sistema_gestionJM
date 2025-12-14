@@ -1,33 +1,26 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import HttpResponse, FileResponse
-from django.db.models import Q, Sum
+from django.http import HttpResponse
+from django.db.models import Q, Sum 
 from django.contrib import messages
 from .models import Recibo
 import io
 import os
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter, landscape
-from reportlab.lib.utils import ImageReader
-from reportlab.platypus import SimpleDocTemplate, Table, Paragraph
-from decimal import Decimal
 import logging
 from django.urls import reverse
 from .utils import importar_recibos_desde_excel, generar_reporte_excel, generar_pdf_reporte, generar_pdf_recibo_unitario
 from django.conf import settings
 from django.views.generic import ListView, TemplateView
 from .forms import ReciboForm
-from .constants import CATEGORY_CHOICES_MAP, CATEGORY_CHOICES, ESTADO_CHOICES_MAP
+from .constants import CATEGORY_CHOICES, ESTADO_CHOICES_MAP
 import zipfile
 from django.utils import timezone
-import pandas as pd
-from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime
-import pytz # Importación necesaria para manejar la zona horaria
+import pytz 
 from django.core.paginator import Paginator
 
 logger = logging.getLogger(__name__)
 
-
+# --- CONFIGURACIÓN DE RUTAS Y CONSTANTES (Mantener por si otras funciones lo usan) ---
 try:
     HEADER_IMAGE = os.path.join(
         settings.BASE_DIR,
@@ -39,55 +32,32 @@ try:
         'encabezado.png'
     )
 except AttributeError:
-    # Fallback si settings.BASE_DIR no está definido (aunque en Django debería estarlo)
+    # Fallback si settings.BASE_DIR no está definido
     HEADER_IMAGE = os.path.join(os.path.dirname(__file__), '..', 'static', 'recibos', 'images', 'encabezado.png')
 
+# --- CLASE BASE Y ELIMINACIÓN DE FUNCIONES REDUNDANTES ---
 
 class PaginaBaseView(TemplateView):
     template_name = 'base.html'
 
-
-def format_currency(amount):
-    """Formatea el monto como moneda (ej: 1.234,56)."""
-    try:
-        amount_decimal = Decimal(amount)
-        formatted = "{:,.2f}".format(amount_decimal)
-        return formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return "0,00"
-
-def draw_text_line(canvas_obj, text, x_start, y_start, font_name="Helvetica", font_size=10, is_bold=False):
-    """Dibuja una línea de texto y ajusta la posición Y."""
-    font = font_name + "-Bold" if is_bold else font_name
-    canvas_obj.setFont(font, font_size)
-    canvas_obj.drawString(x_start, y_start, str(text))
-    return y_start - 15
-
-def draw_centered_text_right(canvas_obj, y_pos, text, x_start, width, font_name="Helvetica", font_size=10, is_bold=False):
-    """Centra el texto dentro de un ancho específico."""
-    font = font_name + "-Bold" if is_bold else font_name
-    canvas_obj.setFont(font, font_size)
-    text_width = canvas_obj.stringWidth(text, font, font_size)
-    x = x_start + (width - text_width) / 2
-    canvas_obj.drawString(x, y_pos, text.upper())
-
+# VISTAS DE DESCARGA Y LÓGICA DE PDF/ZIP
 
 def generar_pdf_recibo(request, pk):
     """
     Genera el PDF de un recibo específico y retorna el HttpResponse para
-    la descarga directa (Usado por el botón del dashboard).
+    la descarga directa. Delega la lógica de generación a utils.py.
     """
     try:
         recibo = get_object_or_404(Recibo, pk=pk)
         return generar_pdf_recibo_unitario(recibo)
     except Exception as e:
         logger.error(f"Error al generar PDF unitario para PK={pk}: {e}")
-        return HttpResponse(f"Error al generar el PDF: {e}", status=500)
-
+        messages.error(request, f"Error al generar el PDF: {e}")
+        return redirect(reverse('recibos:dashboard')) 
 
 def generar_zip_recibos(request):
     """
-    Toma una lista de PKs de recibos, genera el PDF de cada uno y los comprime en un ZIP.
+    Toma una lista de PKs, genera el PDF de cada uno y los comprime en un ZIP.
     """
     pks_str = request.GET.get('pks')
     if not pks_str:
@@ -95,7 +65,7 @@ def generar_zip_recibos(request):
         return redirect(reverse('recibos:dashboard'))
 
     try:
-        pks = [int(pk) for pk in pks_str.split(',')]
+        pks = [int(pk) for pk in pks_str.split(',') if pk] 
         recibos = Recibo.objects.filter(pk__in=pks)
     except ValueError:
         messages.error(request, "Error en el formato de los IDs de recibos.")
@@ -104,8 +74,8 @@ def generar_zip_recibos(request):
         messages.error(request, f"Error al buscar recibos: {e}")
         return redirect(reverse('recibos:dashboard'))
 
-
     zip_buffer = io.BytesIO()
+    count_success = 0
 
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for recibo in recibos:
@@ -117,11 +87,15 @@ def generar_zip_recibos(request):
                 filename = f"Recibo_N_{num_recibo_zfill}_{recibo.rif_cedula_identidad}.pdf"
 
                 zipf.writestr(filename, pdf_buffer_value)
+                count_success += 1
             except Exception as e:
                 logger.error(f"Error al generar el PDF para el recibo PK={recibo.pk}: {e}")
 
-
     zip_buffer.seek(0)
+
+    if count_success == 0:
+        messages.error(request, "No se pudo generar ningún PDF. El ZIP está vacío.")
+        return redirect(reverse('recibos:dashboard'))
 
     filename_zip = f"Recibos_Masivos_{timezone.now().strftime('%Y%m%d_%H%M%S')}.zip"
     response = HttpResponse(
@@ -129,9 +103,13 @@ def generar_zip_recibos(request):
         content_type='application/zip'
     )
     response['Content-Disposition'] = f'attachment; filename="{filename_zip}"'
+    
+    messages.success(request, f"Se generó el ZIP con {count_success} recibo(s) exitosamente.")
 
     return response
 
+
+# DASHBOARD Y FILTROS (ReciboListView)
 
 class ReciboListView(ListView):
     model = Recibo
@@ -142,12 +120,8 @@ class ReciboListView(ListView):
     def post(self, request, *args, **kwargs):
         """Maneja todas las acciones POST: Carga de Excel, Anulación, Limpieza."""
         action = request.POST.get('action')
-
-        # Obtener la zona horaria del proyecto de Django para manejar la fecha de anulación
-        try:
-            current_timezone = pytz.timezone(settings.TIME_ZONE)
-        except:
-            current_timezone = timezone.get_current_timezone() # Fallback si TIME_ZONE no está configurado
+        
+        current_timezone = pytz.timezone(settings.TIME_ZONE) if hasattr(settings, 'TIME_ZONE') else timezone.get_current_timezone()
 
         if action == 'anular':
             recibo_id = request.POST.get('recibo_id')
@@ -167,7 +141,6 @@ class ReciboListView(ListView):
             return redirect(reverse('recibos:dashboard'))
 
         elif action == 'clear_logs':
-            # Nota: 'clear_logs' en realidad elimina todos los recibos. Mantengo tu lógica.
             Recibo.objects.all().delete()
             messages.success(request, "Todos los recibos han sido eliminados de la base de datos.")
             return redirect(reverse('recibos:dashboard'))
@@ -191,7 +164,6 @@ class ReciboListView(ListView):
 
                     elif success:
                         messages.warning(request, message)
-
                     else:
                         messages.error(request, f"Fallo en la carga de Excel: {message}")
 
@@ -205,22 +177,21 @@ class ReciboListView(ListView):
 
 
     def get_queryset(self):
-
         queryset = Recibo.objects.filter(anulado=False).order_by('-fecha', '-numero_recibo')
 
         search_query = self.request.GET.get('q')
         search_field = self.request.GET.get('field', '')
 
+        # --- Lógica de Búsqueda 
         if search_query:
             query_normalizado = search_query.strip()
-
-            if search_field and search_field != 'todos':
+            
+            if search_field and search_field != 'todos' and hasattr(Recibo, search_field):
                 try:
                     filtro = {f'{search_field}__icontains': query_normalizado}
                     queryset = queryset.filter(**filtro)
                 except Exception as e:
                     logger.error(f"Error al filtrar por campo dinámico {search_field}: {e}")
-
             else:
                 q_objects = (
                     Q(nombre__icontains=query_normalizado) |
@@ -232,12 +203,13 @@ class ReciboListView(ListView):
 
                 try:
                     recibo_id = int(query_normalizado)
-                    q_objects |= Q(id=recibo_id)
+                    q_objects |= Q(pk=recibo_id)
                 except ValueError:
                     pass
 
                 queryset = queryset.filter(q_objects)
 
+        # --- Filtros de Estado y Fechas  ---
         estado_seleccionado = self.request.GET.get('estado')
         if estado_seleccionado and estado_seleccionado != "":
             queryset = queryset.filter(estado__iexact=estado_seleccionado)
@@ -253,6 +225,7 @@ class ReciboListView(ListView):
         except ValueError:
             pass
 
+        # --- Filtros de Categoría  ---
         category_filters = Q()
         for codigo, _ in CATEGORY_CHOICES:
             if self.request.GET.get(codigo) == 'on':
@@ -266,6 +239,7 @@ class ReciboListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        # Consulta eficiente de estados únicos.
         context['estados_db'] = Recibo.objects.filter(anulado=False).exclude(
             estado__isnull=True
         ).exclude(
@@ -279,6 +253,7 @@ class ReciboListView(ListView):
         context['current_start_date'] = self.request.GET.get('fecha_inicio')
         context['current_end_date'] = self.request.GET.get('fecha_fin')
 
+        # Manejo de parámetros GET para la paginación 
         request_get_copy = self.request.GET.copy()
         if 'page' in request_get_copy:
             del request_get_copy['page']
@@ -293,22 +268,31 @@ class ReciboListView(ListView):
         return context
 
 
+# VISTAS DE REPORTE (Excel y PDF Masivo)
+
 def generar_reporte_view(request):
+    """
+    Función que maneja los filtros de reporte y delega la generación del archivo
+    (Excel o PDF) a las funciones auxiliares en utils.py.
+    """
+    
+    # 1. Preparación del Queryset base
     recibos_queryset = Recibo.objects.filter(anulado=False).order_by('-fecha', '-numero_recibo')
 
     filters = Q()
     filtros_aplicados = {}
     periodo_str = 'Todas las fechas'
 
+    # 2. Aplicación de Filtros 
     estado_seleccionado = request.GET.get('estado')
-
     if estado_seleccionado and estado_seleccionado != "":
         filters &= Q(estado__iexact=estado_seleccionado)
-        filtros_aplicados['estado'] = estado_seleccionado if estado_seleccionado else 'Todos los estados'
+    filtros_aplicados['estado'] = estado_seleccionado if estado_seleccionado else 'Todos los estados'
 
     fecha_inicio_str = request.GET.get('fecha_inicio')
     fecha_fin_str = request.GET.get('fecha_fin')
 
+    # Manejo de período
     try:
         if fecha_inicio_str:
             filters &= Q(fecha__gte=fecha_inicio_str)
@@ -320,42 +304,35 @@ def generar_reporte_view(request):
                 periodo_str = f"Hasta: {fecha_fin_str}"
             else:
                 periodo_str = f"{periodo_str} Hasta: {fecha_fin_str}"
-
     except ValueError:
         pass
-
     filtros_aplicados['periodo'] = periodo_str.replace('Todas las fechas Hasta: None', 'Todas las fechas')
 
+    # Manejo de categorías
     selected_categories_names = []
     category_filters = Q()
-    category_count = 0
-
     for codigo, nombre_display in CATEGORY_CHOICES:
         if request.GET.get(codigo) == 'on':
             category_filters |= Q(**{f'{codigo}': True})
             selected_categories_names.append(nombre_display)
-            category_count += 1
 
-    if category_count > 0:
+    if category_filters:
         filters &= category_filters
         filtros_aplicados['categorias'] = ', '.join(selected_categories_names)
     else:
         filtros_aplicados['categorias'] = 'Todas las categorías'
 
+    # Manejo de búsqueda
     search_query = request.GET.get('q')
     search_field = request.GET.get('field', '')
 
     if search_query:
         query_normalizado = search_query.strip()
-
-        if search_field and search_field != 'todos':
-            try:
-                filtro = {f'{search_field}__icontains': query_normalizado}
-                filters &= Q(**filtro)
-            except Exception:
-                pass
+        q_search = Q()
+        if search_field and search_field != 'todos' and hasattr(Recibo, search_field):
+            q_search = Q(**{f'{search_field}__icontains': query_normalizado})
         else:
-            q_objects = (
+            q_search = (
                 Q(nombre__icontains=query_normalizado) |
                 Q(rif_cedula_identidad__icontains=query_normalizado) |
                 Q(numero_recibo__iexact=query_normalizado) |
@@ -364,64 +341,48 @@ def generar_reporte_view(request):
             )
             try:
                 recibo_id = int(query_normalizado)
-                q_objects |= Q(id=recibo_id)
+                q_search |= Q(pk=recibo_id)
             except ValueError:
                 pass
-            filters &= q_objects
-
+        filters &= q_search
         filtros_aplicados['busqueda'] = search_query
     else:
         filtros_aplicados['busqueda'] = 'Ninguna'
 
-
+    # Filtrar el queryset final
     recibos_filtrados = recibos_queryset.filter(filters)
-
+    
+    # Manejo de la acción (excel o pdf)
     action = request.GET.get('action')
-
-    # =========================================================
-    # INICIO: MODIFICACIÓN CLAVE PARA LOGS DE REPORTE
-    # =========================================================
+    
     if action == 'excel':
         try:
-            # 1. Ejecutar la generación del reporte (debe devolver HttpResponse con el archivo)
             response = generar_reporte_excel(request.GET, recibos_filtrados, filtros_aplicados)
-            
-            # 2. Configurar el mensaje de éxito (se mostrará en la próxima carga de página)
-            messages.success(request, f"El reporte Excel ({len(recibos_filtrados)} recibos) ha sido generado con éxito y la descarga debería comenzar.")
-            
-            # 3. Devolver la respuesta de descarga
+            messages.success(request, f"El reporte Excel ({len(recibos_filtrados)} recibos) ha sido generado con éxito.")
             return response
             
         except Exception as e:
             logger.error(f"Error al generar el reporte Excel: {e}")
             messages.error(request, f"Error al generar el reporte Excel. Detalles: {e}")
-            # En caso de error, redirigir al dashboard con los filtros originales
             return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
 
     elif action == 'pdf':
         try:
-            # 1. Ejecutar la generación del reporte (debe devolver HttpResponse con el archivo)
             response = generar_pdf_reporte(recibos_filtrados, filtros_aplicados)
-            
-            # 2. Configurar el mensaje de éxito
-            messages.success(request, f"El reporte PDF ({len(recibos_filtrados)} recibos) ha sido generado con éxito y la descarga debería comenzar.")
-            
-            # 3. Devolver la respuesta de descarga
+            messages.success(request, f"El reporte PDF ({len(recibos_filtrados)} recibos) ha sido generado con éxito.")
             return response
             
         except Exception as e:
             logger.error(f"Error al generar el reporte PDF: {e}")
             messages.error(request, f"Error al generar el reporte PDF. Consulte la consola del servidor: {e}")
-            # En caso de error, redirigir al dashboard con los filtros originales
             return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
-    # =========================================================
-    # FIN: MODIFICACIÓN CLAVE
-    # =========================================================
-
+            
     else:
         messages.error(request, "Acción de reporte no válida.")
         return redirect(reverse('recibos:dashboard') + '?' + request.GET.urlencode())
 
+
+# VISTAS DE MODIFICACIÓN Y ANULACIÓN
 
 def modificar_recibo(request, pk):
     """
@@ -430,6 +391,9 @@ def modificar_recibo(request, pk):
     recibo = get_object_or_404(Recibo, pk=pk)
 
     num_recibo_zfill = str(recibo.numero_recibo).zfill(4) if recibo.numero_recibo else '0000'
+    
+    current_timezone = pytz.timezone(settings.TIME_ZONE) if hasattr(settings, 'TIME_ZONE') else timezone.get_current_timezone()
+
 
     if recibo.anulado:
         messages.error(request, f"El recibo N°{num_recibo_zfill} se encuentra ANULADO y es irreversible. No se pueden realizar cambios.")
@@ -439,19 +403,12 @@ def modificar_recibo(request, pk):
         action = request.POST.get('action')
 
         if action == 'anular':
-
-            # Obtener la zona horaria del proyecto de Django
-            try:
-                current_timezone = pytz.timezone(settings.TIME_ZONE)
-            except:
-                current_timezone = timezone.get_current_timezone()
-
+            
             recibo.anulado = True
             recibo.fecha_anulacion = datetime.now(current_timezone)
             recibo.save()
             messages.warning(request, f"¡Recibo N°{num_recibo_zfill} ha sido ANULADO exitosamente! (Acción irreversible)")
 
-            # Redirigir al dashboard
             return redirect(reverse('recibos:dashboard'))
 
         else:
@@ -477,6 +434,9 @@ def modificar_recibo(request, pk):
 
 
 def recibos_anulados(request):
+    """
+    Muestra la lista de recibos anulados con funcionalidad de búsqueda y paginación.
+    """
 
     # 1. Obtener todos los recibos anulados
     queryset = Recibo.objects.filter(anulado=True).order_by('-fecha_anulacion')
@@ -484,10 +444,11 @@ def recibos_anulados(request):
     # 2. Manejar la Búsqueda (Filtro por q)
     query = request.GET.get('q')
     if query:
+        query_normalizado = query.strip()
         queryset = queryset.filter(
-            Q(numero_recibo__icontains=query) |
-            Q(nombre__icontains=query) |
-            Q(rif_cedula_identidad__icontains=query)
+            Q(numero_recibo__icontains=query_normalizado) |
+            Q(nombre__icontains=query_normalizado) |
+            Q(rif_cedula_identidad__icontains=query_normalizado)
         )
 
     # 3. Manejar la Paginación (20 ítems por página)

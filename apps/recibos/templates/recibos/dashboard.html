@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Dashboard | Sistema de Gestión de Recibos{% endblock title %}</title>
 
-    {# Configuración de Tailwind CSS #}
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config={
@@ -19,20 +18,13 @@
             },
         }
     </script>
-
-    {# Font Awesome Icons #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"/>
-
-    {# Estilos personalizados #}
     <link rel="stylesheet" href="{% static 'recibos/css/dashboard.css' %}">
 
 </head>
 
 <body class="min-h-screen flex flex-col bg-gray-100">
 
-    {#=================================================================#}
-    {# 1. ENCABEZADO (HEADER) #}
-    {#=================================================================#}
     <header class="bg-indigo-700 shadow-lg z-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
             <a class="text-white text-xl font-bold flex items-center">
@@ -40,32 +32,23 @@
                 App Recibos
             </a>
             <div class="flex items-center space-x-4">
-                {# Botón compacto para Página Principal (Solo Icono en pantallas pequeñas) #}
                 <a href="{% url 'base' %}"
                     class="p-2 text-sm font-medium text-white bg-indigo-600 rounded-full hover:bg-indigo-700 transition duration-150 shadow-md flex items-center">
 
-                    {# Icono #}
                     <i class="fas fa-home"></i>
 
-                    {# Texto: Solo visible en pantallas medianas y grandes (sm:inline) #}
                     <span class="hidden sm:inline ml-2">Principal</span>
                 </a>
             </div>
         </div>
     </header>
 
-    {#=================================================================#}
-    {# 2. CONTENIDO PRINCIPAL (MAIN) #}
-    {#=================================================================#}
+    {#CONTENIDO PRINCIPAL (MAIN) #}
     <main class="flex-grow p-4 sm:p-6 lg:p-8">
         <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 bg-white/80 rounded-2xl shadow-xl">
 
             <h1 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Generador de Recibos de Pago</h1>
 
-            {#=================================================================#}
-            {# MENSAJES DE DJANGO PARA LOGS (Ocultos y gestionados por JS) #}
-            {# ESTE BLOQUE ES CRUCIAL PARA LA INTEGRACIÓN CON dashboard.js #}
-            {#=================================================================#}
             {% if messages %}
             <div id="django-message-catcher" style="display:none;">
                 {% for message in messages %}
@@ -80,12 +63,10 @@
 
             <div class="flex flex-col lg:flex-row gap-6">
 
-                {#=================================================================#}
-                {# 2.1 ASIDE (PANEL LATERAL: Carga y Logs) #}
-                {#=================================================================#}
+                {# ASIDE (PANEL LATERAL: Carga y Logs) #}
                 <aside class="w-full lg:w-1/4 space-y-6 self-start">
 
-                    {# BLOQUE 1: Carga de Archivos #}
+                    {#Carga de Archivos #}
                     <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
                         <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
                             <i class="fas fa-file-upload mr-2 text-indigo-600"></i> Carga de Archivos Excel
@@ -111,7 +92,7 @@
                         </p>
                     </div>
 
-                    {# BLOQUE 2: Botón de Generar Recibos #}
+                    {#Botón de Generar Recibos #}
                     <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100">
                         <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
                             <i class="fas fa-edit mr-2 text-yellow-600"></i> Generar Recibos
@@ -126,7 +107,7 @@
                         </p>
                     </div>
 
-                    {# BLOQUE 3: Logs y Botón Limpiar Logs Visual #}
+                    {#Logs y Botón Limpiar Logs #}
                     <div class="bg-white p-5 rounded-xl shadow-md border border-gray-100 max-h-96 flex flex-col">
                         <h2 class="text-lg font-bold text-gray-800 mb-3 flex items-center">
                             <i class="fas fa-clipboard-list mr-2 text-blue-600"></i> Procesos y Logs
@@ -136,7 +117,7 @@
                             <p class="text-gray-400"></p>
                         </div>
 
-                        {# BOTÓN: Limpiar Logs (SÓLO VISUAL) #}
+                        {# BOTÓN: Limpiar Logs #}
                         <button type="button"
                             data-message="¿Estás seguro que deseas LIMPIAR el contenido visual de los Logs?"
                             data-confirm-text="Sí, Limpiar"
@@ -156,9 +137,7 @@
                 </aside>
 
 
-                {#=================================================================#}
-                {# 2.2 SECTION (CONTENIDO PRINCIPAL: Filtros y Tabla) #}
-                {#=================================================================#}
+                {# SECTION (CONTENIDO PRINCIPAL: Filtros y Tabla) #}
                 <section class="w-full lg:w-3/4 space-y-6">
 
                     {# Módulo de Reportes y Filtrado #}
@@ -264,7 +243,6 @@
                         {# Zona de Búsqueda de la Tabla #}
                         <form method="GET" action=".">
 
-                            {# Mantiene todos los parámetros GET activos (filtros, etc.) excepto 'q','field' y 'page' #}
                             {% for key, value in request.GET.items %}
                                 {% if key != 'q' and key != 'page' and key != 'field' %}
                                     <input type="hidden" name="{{ key }}" value="{{ value }}">
@@ -380,14 +358,14 @@
                                         <td class="px-3 py-2 whitespace-nowrap text-center text-sm font-medium">
                                             <div class="flex space-x-2 justify-center">
 
-                                                {# 1. DESCARGAR (PDF) - Icono de flecha abajo #}
+                                                {# DESCARGAR (PDF) - Icono de flecha abajo #}
                                                 <a href="{% url 'recibos:generar_pdf_recibo' recibo.pk %}"
                                                     title="Descargar PDF"
                                                     class="text-green-600 hover:text-green-900 transition duration-150 p-1 rounded hover:bg-green-50">
                                                     <i class="fas fa-file-pdf text-xl"></i>
                                                 </a>
 
-                                                {# 2. MODIFICAR (Icono lápiz) - ENLACE DIRECTO #}
+                                                {# MODIFICAR (Icono lápiz) - ENLACE DIRECTO #}
                                                 {% if not recibo.anulado %}
                                                 <a href="{% url 'recibos:modificar_recibo' pk=recibo.pk %}"
                                                     title="Modificar Recibo"
@@ -400,7 +378,7 @@
                                                 </span>
                                                 {% endif %}
 
-                                                {# 3. ANULAR (Icono de cruz) #}
+                                                {# ANULAR (Icono de cruz) #}
                                                 {% if not recibo.anulado %}
                                                 <button type="button"
                                                     data-message="¿Estás seguro que deseas **ANULAR el recibo N°{{ recibo.numero_recibo|stringformat:'04d' }}**? Esta acción no se puede deshacer."
@@ -498,9 +476,6 @@
                 </section>
             </div>
 
-            {#=================================================================#}
-            {# 3. FORMULARIOS OCULTOS PARA POST (Anular, Limpiar BD) #}
-            {#=================================================================#}
             <form id="anular-form" method="POST" action="{% url 'recibos:dashboard' %}" class="hidden">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="anular">
@@ -516,18 +491,13 @@
         </div>
     </main>
 
-    {#=================================================================#}
-    {# 4. FOOTER #}
-    {#=================================================================#}
     <footer class="bg-gray-800 text-white p-4 mt-auto">
         <div class="max-w-7xl mx-auto text-center text-sm">
             Sistema de Gestión de Recibos &copy;{% now "Y" %}
         </div>
     </footer>
 
-    {#=================================================================#}
-    {# 5. MODAL DE CONFIRMACIÓN #}
-    {#=================================================================#}
+    {# MODAL DE CONFIRMACIÓN #}
     <div id="confirmation-modal"
         class="fixed inset-0 bg-gray-600 bg-opacity-75 z-50 hidden transition-opacity duration-300" style="opacity:0;">
         <div class="flex items-center justify-center min-h-screen p-4">
@@ -551,10 +521,7 @@
         </div>
     </div>
 
-    {#=================================================================#}
     {# 6. SCRIPTS JS #}
-    {#=================================================================#}
-    {# Este archivo contiene la lógica completa para el dashboard, modal y logs. #}
     <script src="{% static 'recibos/js/dashboard.js' %}"></script>
     {% block extra_js %}{% endblock extra_js %}
 

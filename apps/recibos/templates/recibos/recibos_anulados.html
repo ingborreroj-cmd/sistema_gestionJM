@@ -17,9 +17,7 @@
         </a>
     </header>
 
-    {# ========================================================= #}
-    {# 💡 NUEVA SECCIÓN: BARRA DE BÚSQUEDA #}
-    {# ========================================================= #}
+    {#SECCIÓN: BARRA DE BÚSQUEDA #}
     <div class="mb-4">
         <form method="GET" action="." class="flex items-center space-x-2">
             <div class="relative flex-grow">
@@ -107,10 +105,7 @@
         </table>
     </div>
 
-    {# ========================================================= #}
-    {# 💡 NUEVA SECCIÓN: PAGINACIÓN #}
-    {# (Asume que `recibos` es un objeto Page de Django Paginator) #}
-    {# ========================================================= #}
+    {# SECCIÓN: PAGINACIÓN #}
     {% if recibos.has_other_pages %}
     <div class="mt-4 flex justify-between items-center px-4 py-3 bg-white border border-gray-200 sm:rounded-lg shadow-md">
         

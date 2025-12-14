@@ -1,15 +1,9 @@
 from django import template
 from django.utils.text import slugify as django_slugify
 from django.template.defaultfilters import capfirst
-from ..models import CATEGORY_CHOICES_MAP  # Asegúrate de que esta importación sea correcta
+from ..models import CATEGORY_CHOICES_MAP  
 from urllib.parse import urlparse, parse_qs, urlencode
 import re
-# Ya no necesitamos 'Decimal' porque eliminamos currency_format
-
-# 💡 NOTA IMPORTANTE:
-# Si el mapeo de CATEGORY_CHOICES_MAP no se importa correctamente
-# desde models.py, DEBES asegurarte de que exista una definición
-# funcional para que el filtro 'get_category_label' funcione.
 
 register = template.Library()
 
@@ -25,7 +19,7 @@ def split(value, arg):
     try:
         return value.split(arg)
     except:
-        return [value] # Devuelve una lista con el valor original si falla
+        return [value] 
 
 @register.filter
 def slugify(value):
@@ -64,8 +58,6 @@ def get_category_label(field_name):
         return 'Concepto Desconocido'
     
     return CATEGORY_CHOICES_MAP.get(key, 'Concepto Desconocido')
-
-# ❌ FILTRO 'currency_format' ELIMINADO
 
 # --- FILTROS DE MANEJO DE URL ---
 

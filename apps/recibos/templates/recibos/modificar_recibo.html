@@ -19,7 +19,6 @@
 
     <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
         
-        {# Contenedor de Mensajes (Si la vista retorna errores) #}
         {% for message in messages %}
         <div class="mb-6 p-4 rounded-lg text-sm {% if message.tags == 'success' %}bg-green-100 text-green-800{% elif message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
             <p class="font-semibold">{{ message }}</p>
@@ -29,14 +28,11 @@
         <form method="POST" action="{% url 'recibos:modificar_recibo' pk=recibo.pk %}">
             {% csrf_token %}
             
-            {# Campo oculto que indica la acción por defecto ('modificar') o la acción de anulación/eliminación enviada por JS #}
             <input type="hidden" name="action" id="form-action" value="modificar">
 
             <div class="space-y-12">
 
-                {# ======================================================= #}
-                {# BLOQUE 1: DATOS DEL CLIENTE Y GENERALES #}
-                {# ======================================================= #}
+                {# DATOS DEL CLIENTE Y GENERALES #}
                 <div class="border-b border-gray-200 pb-10">
                     <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
                         <i class="fas fa-user-tag mr-3 text-indigo-500"></i>
@@ -89,9 +85,7 @@
                     </div>
                 </div>
 
-                {# ======================================================= #}
-                {# BLOQUE 2: MONTOS Y TASAS #}
-                {# ======================================================= #}
+                {#MONTOS Y TASAS #}
                 <div class="border-b border-gray-200 pb-10">
                     <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
                         <i class="fas fa-money-bill-wave mr-3 text-green-600"></i>
@@ -123,9 +117,7 @@
                     </div>
                 </div>
                 
-                {# ======================================================= #}
-                {# BLOQUE 3: CATEGORÍAS (CHECKBOXES CON ETIQUETAS) #}
-                {# ======================================================= #}
+                {# CATEGORÍAS (CHECKBOXES CON ETIQUETAS) #}
                 <div class="border-b border-gray-200 pb-10">
                     <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
                         <i class="fas fa-tags mr-3 text-purple-600"></i>
@@ -151,9 +143,7 @@
                     </div>
                 </div>
 
-                {# ======================================================= #}
-                {# BLOQUE 4: CONCILIACIÓN Y PAGO #}
-                {# ======================================================= #}
+                {# CONCILIACIÓN Y PAGO #}
                 <div class="pb-2">
                     <h2 class="text-2xl font-bold leading-7 text-gray-900 flex items-center mb-6">
                         <i class="fas fa-clipboard-check mr-3 text-blue-600"></i>
@@ -203,12 +193,10 @@
                 </div>
             </div>
             
-            {# ======================================================= #}
-            {# BOTONES DE ACCIÓN (Corregido para Anular) #}
-            {# ======================================================= #}
+            {# BOTONES DE ACCIÓN #}
             <div class="flex flex-wrap justify-between items-center pt-6 border-t border-gray-200 gap-4 mt-8">
                 
-                {# Botón 3: ANULAR (Activará el modal de confirmación y enviará action='anular') #}
+                {# Botón 3: ANULAR  #}
                 <button type="button" 
                     id="anular-recibo-btn"
                     title="Anular el recibo de forma permanente (acción irreversible)"
@@ -246,7 +234,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     const anularBtn = document.getElementById('anular-recibo-btn'); 
     const formAction = document.getElementById('form-action');
-    // Asume que este ID está en tu modal global (generalmente en dashboard.html o base.html)
     const confirmButton = document.getElementById('confirm-action-button'); 
 
     // 1. Manejador para mostrar el modal al hacer clic en ANULAR
@@ -254,17 +241,15 @@ document.addEventListener('DOMContentLoaded', function() {
         anularBtn.addEventListener('click', function() {
             const reciboNum = this.dataset.reciboNum;
             
-            // Reutiliza la función showModal (debe estar definida globalmente)
             if (window.showModal) {
                 window.showModal(
                     'Confirmación de Anulación',
                     `¿Estás seguro que deseas **ANULAR** el recibo N°${reciboNum}? Esta acción es irreversible y archivará el recibo.`,
                     'Sí, ANULAR',
-                    'anular_confirm', // Acción que reconocerá el manejador de JS
+                    'anular_confirm', 
                     'red'
                 );
             } else {
-                // Fallback simple si showModal no existe
                 if (confirm(`¿Estás seguro que deseas ANULAR el recibo N°${reciboNum}?`)) {
                     formAction.value = 'anular';
                     document.querySelector('form').submit();
@@ -279,15 +264,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const actionType = this.getAttribute('data-action-type');
             
             if (actionType === 'anular_confirm') {
-                // CLAVE: Cambia el valor del campo oculto a 'anular'
                 formAction.value = 'anular'; 
                 
-                // Ocultar modal (si existe la función global)
                 if (window.hideModal) {
                     window.hideModal();
                 }
                 
-                // Envía el formulario POST a la vista, que detectará action='anular'
                 document.querySelector('form').submit();
             } 
         };

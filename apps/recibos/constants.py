@@ -1,5 +1,3 @@
-# constants.py
-
 CATEGORY_CHOICES = (
     ('categoria1', '1.Título Tierra Urbana'),
     ('categoria2', '2.Título + Vivienda'),
@@ -14,9 +12,6 @@ CATEGORY_CHOICES = (
 )
 CATEGORY_CHOICES_MAP = dict(CATEGORY_CHOICES)
 
-# -------------------------------------------------------------
-# 🚀 ADICIÓN NECESARIA: Definición de Estados del Recibo
-# -------------------------------------------------------------
 
 ESTADO_PAGADO = 'PAGADO'
 ESTADO_ANULADO = 'ANULADO'
