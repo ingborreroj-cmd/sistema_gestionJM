@@ -6,7 +6,6 @@
 {% block main_content %}
 
 <div class="max-w-full mx-auto p-4 sm:p-6 lg:p-8">
-        
     <header class="flex justify-between items-center mb-6">
         <h1 class="text-3xl font-extrabold text-gray-900 flex items-center">
             <i class="fas fa-archive mr-3 text-red-600"></i>
@@ -18,6 +17,34 @@
         </a>
     </header>
 
+    {# ========================================================= #}
+    {# 💡 NUEVA SECCIÓN: BARRA DE BÚSQUEDA #}
+    {# ========================================================= #}
+    <div class="mb-4">
+        <form method="GET" action="." class="flex items-center space-x-2">
+            <div class="relative flex-grow">
+                <input type="text" 
+                       name="q"
+                       placeholder="Buscar por N° Recibo, Nombre, Cédula/RIF..."
+                       value="{{ request.GET.q }}"
+                       class="block w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm shadow-sm"
+                >
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <i class="fas fa-search text-gray-400"></i>
+                </div>
+            </div>
+            <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm transition duration-150">
+                Buscar
+            </button>
+            {% if request.GET.q %}
+            <a href="{% url 'recibos:recibos_anulados' %}" class="text-sm text-gray-500 hover:text-gray-700 py-2">
+                <i class="fas fa-times-circle mr-1"></i> Limpiar
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+
     <div class="shadow-xl overflow-hidden border border-gray-200 sm:rounded-lg">
         <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
@@ -27,7 +54,6 @@
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre/Cédula/RIF</th>
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto Total (Bs)</th>
                     
-                    {# NUEVA COLUMNA AÑADIDA PARA LA FECHA DE ANULACIÓN #}
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Anulación</th> 
                     
                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th> 
@@ -52,7 +78,6 @@
                         Bs {{ recibo.total_monto_bs|floatformat:2 }}
                     </td>
                     
-                    {# CELDA AÑADIDA: Muestra la fecha de anulación. Usa un formato que incluya hora. #}
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
                         {% if recibo.fecha_anulacion %}
                             {{ recibo.fecha_anulacion|date:"d/m/Y H:i" }} 
@@ -61,12 +86,10 @@
                         {% endif %}
                     </td>
                     
-                    {# Muestra el estado geográfico real #}
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                         {{ recibo.estado|default:"N/A" }}
                     </td>
                     
-                    {# Muestra el estatus de Anulación con la etiqueta visual #}
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-200 text-red-800">
                             ANULADO
@@ -76,13 +99,72 @@
                 {% empty %}
                 <tr>
                     <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                        <i class="fas fa-frown mr-2"></i> No hay recibos anulados en el sistema.
+                        <i class="fas fa-frown mr-2"></i> No hay recibos anulados que coincidan con la búsqueda.
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+
+    {# ========================================================= #}
+    {# 💡 NUEVA SECCIÓN: PAGINACIÓN #}
+    {# (Asume que `recibos` es un objeto Page de Django Paginator) #}
+    {# ========================================================= #}
+    {% if recibos.has_other_pages %}
+    <div class="mt-4 flex justify-between items-center px-4 py-3 bg-white border border-gray-200 sm:rounded-lg shadow-md">
+        
+        {# Información de la página #}
+        <div class="text-sm text-gray-700">
+            Mostrando {{ recibos.start_index }} a {{ recibos.end_index }} de {{ recibos.paginator.count }} resultados.
+        </div>
+
+        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+            
+            {# Botón Anterior #}
+            {% if recibos.has_previous %}
+            <a href="?page={{ recibos.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <span class="sr-only">Anterior</span>
+                <i class="fas fa-chevron-left h-5 w-5"></i>
+            </a>
+            {% else %}
+            <span class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
+                <span class="sr-only">Anterior</span>
+                <i class="fas fa-chevron-left h-5 w-5"></i>
+            </span>
+            {% endif %}
+
+            {# Números de página #}
+            {% for i in recibos.paginator.page_range %}
+                {% if recibos.number == i %}
+                    <span aria-current="page" class="z-10 bg-red-50 border-red-500 text-red-600 relative inline-flex items-center px-4 py-2 border text-sm font-medium">
+                        {{ i }}
+                    </span>
+                {% elif i > recibos.number|add:'-3' and i < recibos.number|add:'3' %}
+                    <a href="?page={{ i }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+                       class="bg-white border-gray-300 text-gray-500 hover:bg-gray-50 relative inline-flex items-center px-4 py-2 border text-sm font-medium">
+                        {{ i }}
+                    </a>
+                {% endif %}
+            {% endfor %}
+
+            {# Botón Siguiente #}
+            {% if recibos.has_next %}
+            <a href="?page={{ recibos.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <span class="sr-only">Siguiente</span>
+                <i class="fas fa-chevron-right h-5 w-5"></i>
+            </a>
+            {% else %}
+            <span class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-gray-100 text-sm font-medium text-gray-400 cursor-not-allowed">
+                <span class="sr-only">Siguiente</span>
+                <i class="fas fa-chevron-right h-5 w-5"></i>
+            </span>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
 
 </div>
 

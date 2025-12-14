@@ -23,7 +23,7 @@ import pandas as pd
 from reportlab.lib.styles import getSampleStyleSheet
 from datetime import datetime
 import pytz # Importación necesaria para manejar la zona horaria
-
+from django.core.paginator import Paginator
 logger = logging.getLogger(__name__)
 
 
@@ -457,13 +457,26 @@ def modificar_recibo(request, pk):
 
 
 def recibos_anulados(request):
-    """
-    Muestra exclusivamente la tabla de recibos que han sido anulados (anulado=True).
-    """
-    recibos_anulados_list = Recibo.objects.filter(anulado=True).order_by('-fecha_creacion')
-
+    
+    # 1. Obtener todos los recibos anulados
+    queryset = Recibo.objects.filter(anulado=True).order_by('-fecha_anulacion')
+    
+    # 2. Manejar la Búsqueda (Filtro por q)
+    query = request.GET.get('q')
+    if query:
+        queryset = queryset.filter(
+            Q(numero_recibo__icontains=query) |
+            Q(nombre__icontains=query) |
+            Q(rif_cedula_identidad__icontains=query)
+        )
+    
+    # 3. Manejar la Paginación (20 ítems por página)
+    paginator = Paginator(queryset, 20)  # <-- Tu límite de 20
+    page_number = request.GET.get('page')
+    recibos_page = paginator.get_page(page_number)
+    
     context = {
-        'recibos': recibos_anulados_list,
         'titulo': 'Recibos Anulados',
+        'recibos': recibos_page,  # <-- ¡Pasar el objeto Page!
     }
     return render(request, 'recibos/recibos_anulados.html', context)
